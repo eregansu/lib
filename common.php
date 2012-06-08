@@ -274,9 +274,9 @@ if(!defined('PLATFORM_LIB'))
 {
 	define('PLATFORM_LIB', PLATFORM_ROOT . 'lib/');
 }
-if(!defined('PLATFORM_PATH'))
+if(!defined('PLATFORM_FRAMEWORK'))
 {
-	define('PLATFORM_PATH', PLATFORM_ROOT . 'platform/');
+	define('PLATFORM_FRAMEWORK', PLATFORM_ROOT . 'framework/');
 }
 if(!defined('CONFIG_ROOT'))
 {
@@ -313,7 +313,7 @@ $MODULE_ROOT = MODULES_ROOT;
 $AUTOLOAD_SUBST = array();
 $AUTOLOAD_SUBST['${lib}'] = PLATFORM_LIB;
 $AUTOLOAD_SUBST['${instance}'] = INSTANCE_ROOT;
-$AUTOLOAD_SUBST['${platform}'] = PLATFORM_PATH;
+$AUTOLOAD_SUBST['${platform}'] = PLATFORM_FRAMEWORK;
 $AUTOLOAD_SUBST['${modules}'] = MODULES_ROOT;
 $AUTOLOAD_SUBST['${module}'] =& $MODULE_ROOT;
 
