@@ -231,6 +231,12 @@ class URI implements ArrayAccess
 		return true;
 	}
 	
+	/* Return the list of registered schemes */
+	public static function schemes()
+	{
+		return self::$schemes;
+	}
+	
 	/* Register all of the schemes in $URI_SCHEMES */
 	public static /*internal*/ function registerSchemes()
 	{
