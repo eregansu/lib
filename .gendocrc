@@ -1,2 +1,4 @@
-package EregansuLib Eregansu Core Library
-
+package lib Core Library
+author Mo McRoberts <https://github.com/nevali>
+sourcebase https://github.com/eregansu/lib/blob/master/
+sourcestrip 1
