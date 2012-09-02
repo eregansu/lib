@@ -16,7 +16,6 @@
  */
 
 /**
- * @package EregansuLib Eregansu Core Library
  * @year 2009-2011
  * @include require_once(dirname(__FILE__) . '/../eregansu/lib/common.php');
  * @since Available in Eregansu 1.0 and later. 

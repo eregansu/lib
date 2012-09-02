@@ -18,7 +18,6 @@
  */
 
 /**
- * @package EregansuLib Eregansu Core Library
  * @year 2011
  * @include uses('asn1');
  * @since Available in Eregansu 1.0 and later. 

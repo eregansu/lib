@@ -16,7 +16,6 @@
  */
 
 /**
- * @package EregansuLib Eregansu Core Library
  * @year 2009, 2010
  * @include uses('base32');
  * @since Available in Eregansu 1.0 and later. 

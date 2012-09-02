@@ -18,7 +18,6 @@
  */
  
 /**
- * @package EregansuLib Eregansu Core Library
  * @year 2009-2012
  * @include uses('request');
  * @since Available in Eregansu 1.0 and later.

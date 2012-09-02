@@ -16,7 +16,6 @@
  */
 
 /**
- * @package EregansuLib Eregansu Core Library
  * @year 2005-2011
  * @include uses('csv-import');
  * @since Available in Eregansu 1.0 and later.
