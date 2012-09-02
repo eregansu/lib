@@ -1,6 +1,6 @@
 <?php
 
-/* Copyright 2011 Mo McRoberts.
+/* Copyright 2011-2012 Mo McRoberts.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -87,7 +87,7 @@ class XapianSearch extends SearchEngine
 		{
 			$args = array('text' => $args);
 		}
-		foreach($this->prefixes as $prefix => $info)
+		foreach($this->prefixes as $key => $info)
 		{
 			if(is_string($info))
 			{
@@ -109,7 +109,7 @@ class XapianSearch extends SearchEngine
 					$qp->add_prefix($key, $info['prefix'], !empty($info['exclusive']));
 				}
 			}
-			$this->prefixes[$prefix] = $info;
+			$this->prefixes[$key] = $info;
 		}
 		foreach($args as $key => $value)
 		{
@@ -306,6 +306,23 @@ class XapianIndexer extends SearchIndexer
 		$doc = new XapianDocument();
 		if(is_array($attributes))
 		{
+			if(isset($attributes['values']))
+			{
+				foreach($attributes['values'] as $k => $val)
+				{
+					$doc->add_value($k, $val);
+				}
+			}
+			unset($attributes['values']);
+			if(isset($attributes['data']))
+			{
+				$data = $attributes['data'];
+				unset($attributes['data']);
+			}
+			else
+			{
+				$data = $attributes;
+			}
 			foreach($attributes as $key => $value)
 			{
 				if(is_array($value))
@@ -320,6 +337,10 @@ class XapianIndexer extends SearchIndexer
 					$doc->add_term('X' . strtoupper($key) . ':' . $value);
 				}
 			}
+			$attributes = $data;
+		}
+		if(is_array($attributes))
+		{
 			$doc->set_data(json_encode($attributes));
 		}
 		else if(is_object($attributes))
