@@ -73,7 +73,7 @@ class URI implements ArrayAccess
 	const void = 'http://rdfs.org/ns/void#';
 	const olo = 'http://purl.org/ontology/olo/core#';
 
-	protected static $schemes;
+	public static $schemes;
 	
 	protected static $registered = false;
 	protected static $namespaces = array();
@@ -171,12 +171,12 @@ class URI implements ArrayAccess
 			 * 'file' and 'class' members, or a string just specifying the name of
 			 * a class.
 			 */
-			if(is_array($info) && isset($info['file']))
-			{
-				require_once($info['file']);
-			}
 			if(is_array($info))
 			{
+				if(isset($info['file']))
+				{
+					require_once($info['file']);
+				}
 				$className = $info['class'];
 			}
 			else
@@ -191,7 +191,7 @@ class URI implements ArrayAccess
 		{
 			if(PHP_VERSION_ID >= 50309)
 			{
-				if(!is_subclass_of($className, 'I' . $handlerType, false))
+				if(!is_subclass_of($className, 'I' . $handlerType, true))
 				{
 					return null;
 				}
