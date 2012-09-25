@@ -184,6 +184,13 @@ class URI implements ArrayAccess
 				$className = $info;
 			}
 		}
+		else
+		{
+			/* The scheme is registered, but no handler of the requested
+			 * type exists.
+			 */
+			return null;
+		}
 		/* If the handler-type is specified, the class must conform to its matching
 		 * interface.
 		 */
