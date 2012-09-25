@@ -1,6 +1,6 @@
 <?php
 
-/* Copyright 2005-2011 Mo McRoberts.
+/* Copyright 2005-2012 Mo McRoberts.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -111,6 +111,14 @@ class CSVImport
 	}
 
 	/**
+	 * Return the list of named fields, in column order
+	 */
+	public function fields()
+	{
+		return $this->fields;
+	}
+
+	/**
 	 * Specify an explicit column-to-field mapping.
 	 *
 	 * @task Reading CSV files
@@ -124,7 +132,7 @@ class CSVImport
 			$this->fields = array();
 			foreach($list as $k => $f)
 			{
-				$this->fields[$k] = $f;
+				$this->fields[$k] = strtolower($f);
 			}
 		}
 		else
