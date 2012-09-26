@@ -64,6 +64,11 @@ abstract class SearchEngine implements ISearchEngine
 	{
 		$this->info = $uri;
 	}
+
+	public function indexer()
+	{
+		return URI::handlerForScheme($this->info->scheme, 'SearchIndexer', false, $this->info);			
+	}
 }
 
 abstract class SearchIndexer implements ISearchIndexer
