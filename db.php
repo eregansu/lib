@@ -244,6 +244,13 @@ abstract class Database implements IDatabase
 		$inst = URI::handlerForScheme($uri->scheme, 'Database', false, $uri);
 		if(!is_object($inst))
 		{
+			/* Try a search engine instead -- at some future point this will
+			 * become unnecessary
+			 */
+			$inst = URI::handlerForScheme($uri->scheme, 'SearchEngine', false, $uri);
+		}
+		if(!is_object($inst))
+		{	
 			throw new DBException(0, 'Unsupported database connection scheme "' . $uri->scheme . '"', null);
 		}
 		return $inst;
