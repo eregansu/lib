@@ -49,8 +49,11 @@ abstract class Observers
 		}
 	}
 	
-	public static function invoke($event, IObservable $observable, $args = null)
+	public static function invoke($event, IObservable $observable, $arg = null /* ... */)
 	{
+		$args = func_get_args();
+		array_shift($args);
+		array_shift($args);
 		if(!isset(self::$callbacks[$event]))
 		{
 			return;
@@ -58,6 +61,20 @@ abstract class Observers
 		foreach(self::$callbacks[$event] as $cb)
 		{
 			call_user_func($cb[0], $observable, $args, $cb[1]);
+		}
+	}
+
+	public static function invokeArray($event, IObservable $observable, &$args)
+	{
+		if(!isset(self::$callbacks[$event]))
+		{
+			return;
+		}
+		foreach(self::$callbacks[$event] as $cb)
+		{
+			/* Ensure pass by reference */
+			$params = array($observable, &$args, $cb[1]);
+			call_user_func_array($cb[0], $params);
 		}
 	}
 }
