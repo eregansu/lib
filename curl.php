@@ -198,10 +198,23 @@ if(function_exists('curl_init'))
 		
 		public function __construct($url = null)
 		{
+			global $CURL_AUTH;
+
 			if($url !== null)
 			{
 				$url = strval($url);
 			}
+			if(isset($CURL_AUTH) && is_array($CURL_AUTH))
+			{
+				foreach($CURL_AUTH as $domain => $auth)
+				{
+					if(!isset(self::$authData[$domain]))
+					{
+						self::$authData[$domain] = $auth;
+					}
+				}
+			}
+			$CURL_AUTH = null;
 			$this->handle = curl_init($url);
 			$this->options['url'] = $url;
 			$this->options['http200Aliases'] = $this->options['headers'] = $this->options['postQuote'] = $this->options['quote'] = array();
@@ -221,7 +234,10 @@ if(function_exists('curl_init'))
 
 		public function __destruct()
 		{
-			curl_close($this->handle);
+			if(isset($this->handle))
+			{
+				curl_close($this->handle);
+			}
 		}
 
 		public function headerFunction($curl, $data)
@@ -249,7 +265,10 @@ if(function_exists('curl_init'))
 		
 		public function close()
 		{
-			curl_close($this->handle);
+			if(isset($this->handle))
+			{
+				curl_close($this->handle);
+			}
 			$this->handle = null;
 		}
 		
@@ -446,9 +465,13 @@ if(function_exists('curl_init'))
 				/* If no cache file was explicitly specified */
 				if(!strlen($dir))
 				{
-					if(defined('CACHE_DIR'))
+					if(defined('CURL_CACHE_DIR'))
 					{
-						$dir = CACHE_DIR;
+						$dir = CURL_CACHE_DIR;
+					}
+					else if(defined('CACHE_DIR'))
+					{
+						$dir = CACHE_DIR . 'curl/';
 					}
 					else
 					{
