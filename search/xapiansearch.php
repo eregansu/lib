@@ -226,7 +226,8 @@ class XapianIndexer extends SearchIndexer
 	public $db;
 	public $indexer;
 	public $stemmer;
-	
+	public $prefixes = array();
+
 	protected $path;
 
 	public function __construct($uri)
@@ -325,16 +326,24 @@ class XapianIndexer extends SearchIndexer
 			}
 			foreach($attributes as $key => $value)
 			{
+				if(isset($this->prefixes[$key]))
+				{
+					$prefix = $this->prefixes[$key];
+				}
+				else
+				{
+					$prefix = 'X' . strtoupper($key) . ':';
+				}
 				if(is_array($value))
 				{
 					foreach($value as $ivalue)
 					{
-						$doc->add_term('X' . strtoupper($key) . ':' . $ivalue);
+						$doc->add_term($prefix . $ivalue);
 					}
 				}
 				else
 				{
-					$doc->add_term('X' . strtoupper($key) . ':' . $value);
+					$doc->add_term($prefix . $value);
 				}
 			}
 			$attributes = $data;
