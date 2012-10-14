@@ -20,9 +20,9 @@ class TestConstants extends TestHarness
 	public function main()
 	{
 		if(!$this->check('__EREGANSU__')) return false;
-		if(!$this->expectPath('INSTANCE_ROOT', dirname(__FILE__) . '/../testsuite')) return false;
+		if(!$this->expectPath('INSTANCE_ROOT', dirname(__FILE__) . '/../../testsuite')) return false;
 		if(!$this->expectPath('PUBLIC_ROOT', INSTANCE_ROOT)) return false;
-		if(!$this->expectPath('PLATFORM_ROOT', dirname(__FILE__) . '/../')) return false;
+		if(!$this->expectPath('PLATFORM_ROOT', dirname(__FILE__) . '/../../')) return false;
 		if(!$this->expectPath('PLATFORM_LIB', PLATFORM_ROOT . 'lib/')) return false;
 		if(!$this->expectPath('PLATFORM_FRAMEWORK', PLATFORM_ROOT . 'framework/')) return false;
 		if(!$this->expectPath('CONFIG_ROOT', INSTANCE_ROOT . 'config/')) return false;
