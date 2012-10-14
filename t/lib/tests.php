@@ -1,6 +1,6 @@
 <?php
 
-/* Copyright 2011 Mo McRoberts.
+/* Copyright 2011, 2012 Mo McRoberts.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,11 +18,11 @@
 define('EREGANSU_SKIP_CONFIG', true);
 define('LOGFILE', 'tests.log');
 
-require_once(dirname(__FILE__) . '/../../platform.php');
+require_once(dirname(__FILE__) . '/../../../platform.php');
 require_once(PLATFORM_ROOT . 'testsuite/testsuite.php');
 
 $suite = TestSuite::suiteFromXML('tests.xml', LOGFILE);
-$suite->issuesUrl = 'http://github.com/nexgenta/eregansu/issues/';
+/* $suite->issuesUrl = 'http://github.com/nexgenta/eregansu/issues/'; */
 $suite->run();
 if($suite->uxpass || $suite->uxfail)
 {
