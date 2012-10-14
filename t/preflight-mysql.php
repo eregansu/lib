@@ -1,6 +1,10 @@
 <?php
 
-if(!defined('MYSQL_ROOT')) exit(126);
+if(!defined('MYSQL_ROOT'))
+{
+	echo "Create a config.php which defines MYSQL_ROOT to run MySQL tests\n";
+	exit(126);
+}
 
 $datadir = realpath(dirname(__FILE__) . '/data');
 
