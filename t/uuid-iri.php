@@ -43,7 +43,18 @@ class TestUuidIri extends TestHarness
 			$result = UUID::iri($uuid);
 			if($result !== $expected)
 			{
-				echo "$uuid: Expected " . $expected . ", UUID::iri() returned " . $result . "\n";
+				echo "$uuid: [1] Expected " . $expected . ", UUID::iri() returned " . $result . "\n";
+				$r = false;
+			}
+			$result = UUID::parse($uuid);
+			if($result->iri !== $expected)
+			{
+				echo "$uuid: [2] Expected " . $expected . ", UUID->iri returned " . $result . "\n";
+				$r = false;
+			}
+			if($result['iri'] !== $expected)
+			{
+				echo "$uuid: [3] Expected " . $expected . ", UUID['iri'] returned " . $result . "\n";
 				$r = false;
 			}
 		}

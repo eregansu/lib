@@ -43,7 +43,18 @@ class TestUuidCanonical extends TestHarness
 			$result = UUID::canonical($uuid);
 			if($result !== $expected)
 			{
-				echo "$uuid: Expected " . $expected . ", UUID::canonical() returned " . $result . "\n";
+				echo "$uuid: [1] Expected " . $expected . ", UUID::canonical() returned " . $result . "\n";
+				$r = false;
+			}
+			$result = UUID::parse($uuid);
+			if($result->canonical !== $expected)
+			{
+				echo "$uuid: [2] Expected " . $expected . ", UUID->canonical returned " . $result . "\n";
+				$r = false;
+			}
+			if($result['canonical'] !== $expected)
+			{
+				echo "$uuid: [3] Expected " . $expected . ", UUID['canonical'] returned " . $result . "\n";
 				$r = false;
 			}
 		}
