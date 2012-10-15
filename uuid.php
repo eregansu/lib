@@ -16,16 +16,14 @@
  */
 
 /**
- * Abstract class containing UUID manipulation facilities.
+ * UUID generation and manipulation facilities
  *
  * The \class{UUID} class contains facilities for generating and manipulating
  * Universally Unique Identifiers (UUIDs), according to 
  * \link{http://www.ietf.org/rfc/rfc4122.txt|RFC 4122} (equivalent to
  * ITU-T Rec. X.667, ISO/IEC 9834-8:2005).
- *
- * @note Instances of the UUID class are never created; all methods are static.
  */
-abstract class UUID
+class UUID implements ArrayAccess
 {
 	const UNKNOWN = -1; /**< Unknown UUID version or variant */
 	
@@ -45,6 +43,10 @@ abstract class UUID
 	const URL = '6ba7b811-9dad-11d1-80b4-00c04fd430c8'; /**< Namespace UUID for URL identifiers */
 	const OID = '6ba7b812-9dad-11d1-80b4-00c04fd430c8'; /**< Namespace UUID for ISO OID identifiers */
 	const DN = '6ba7b814-9dad-11d1-80b4-00c04fd430c8'; /**< Namespace UUID for X.500 DNs */
+
+	const UUID_NULL = '00000000-0000-0000-0000-000000000000';
+
+	protected $info;
 	
 	/**
 	 * @brief Generate a new UUID
@@ -61,7 +63,7 @@ abstract class UUID
 	 * because one or both of \p{$namespace} and \p{$name}
 	 * are not valid, an error occurs and \c{null} is returned.
 	 *
-	 * @type string
+	 * @type UUID
 	 * @param[in,optional] int $kind The kind of UUID to generate.
 	 * @param[in,optional] string $namespace For MD5 (v3) and SHA1 (v5) UUIDs, the namespace which contains \p{$name}.
 	 * @param[in,optional] string $name For MD5 (v3) and SHA1 (v5) UUIDs, the identifier used to generate the UUID.	
@@ -82,14 +84,20 @@ abstract class UUID
 				return self::hash($namespace, $name, $kind);
 			}
 		default:
-			/* Generate a random (version 4) UUID if all else fails */
-			return sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
-						   mt_rand(0, 0xffff), mt_rand(0, 0xffff),
-						   mt_rand(0, 0xffff),
-						   mt_rand(0, 0x0fff) | 0x4000,
-						   mt_rand(0, 0x3fff) | 0x8000, 
-						   mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff));
+			return self::random();
 		}		
+	}
+
+	protected static function random()
+	{
+		/* Generate a random (version 4) UUID if all else fails */
+		return new UUID(sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+			mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+			mt_rand(0, 0xffff),
+			mt_rand(0, 0x0fff) | 0x4000,
+			mt_rand(0, 0x3fff) | 0x8000, 
+			mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)));
+
 	}
 	
 	protected static function hash($namespace, $name, $version)
@@ -110,12 +118,12 @@ abstract class UUID
 		$result['clock_seq_hi_and_reserved'] &= 0x3F;
 		$result['clock_seq_hi_and_reserved'] |= 0x80;
 		$out = sprintf('%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x',
-					   $result['time_low'], $result['time_mid'],
-					   $result['time_hi_and_version'],
-					   $result['clock_seq_hi_and_reserved'], $result['clock_seq_low'],
-					   $result[1], $result[2], $result[3], $result[4],
-					   $result[5], $result[6]);
-		return $out;
+			$result['time_low'], $result['time_mid'],
+			$result['time_hi_and_version'],
+			$result['clock_seq_hi_and_reserved'], $result['clock_seq_low'],
+			$result[1], $result[2], $result[3], $result[4],
+			$result[5], $result[6]);
+		return new UUID($out);
 	}
 
 	/**
@@ -130,7 +138,7 @@ abstract class UUID
 	 */
 	public static function nil()
 	{
-		return '00000000-0000-0000-0000-000000000000';
+		return new UUID(self::UUID_NULL);
 	}
 
 	/**
@@ -146,6 +154,10 @@ abstract class UUID
 	 */
 	public static function isUUID($str)
 	{
+		if($str instanceof UUID)
+		{
+			return $str;
+		}
 		if(preg_match('/^(urn:uuid:)?\{?[a-f0-9]{8}-?[a-f0-9]{4}-?[a-f0-9]{4}-?[a-f0-9]{4}-?[a-f0-9]{12}\}?$/i', $str))
 		{
 			return $str;
@@ -170,6 +182,10 @@ abstract class UUID
 	 */
 	public static function canonical($uuid)
 	{
+		if($uuid instanceof UUID)
+		{
+			return $uuid->info['canonical'];
+		}
 		$uuid = strtolower(trim(str_replace(array('-','{','}'), '', $uuid)));
 		if(!strncmp($uuid, 'urn:uuid:', 9)) $uuid = substr($uuid, 9);
 		if(strlen($uuid) != 32) return null;
@@ -192,6 +208,10 @@ abstract class UUID
 	 */
 	public static function iri($uuid)
 	{
+		if($uuid instanceof UUID)
+		{
+			return $uuid->info['iri'];
+		}
 		if(!($uuid = self::canonical($uuid)))
 		{
 			return null;
@@ -216,6 +236,10 @@ abstract class UUID
 	 */
 	public static function formatted($uuid, $prefix = null, $suffix = null)
 	{
+		if($uuid instanceof UUID)
+		{
+			return $uuid->format($prefix, $suffix);
+		}
 		if(!($uuid = self::canonical($uuid)))
 		{
 			return null;
@@ -244,39 +268,29 @@ abstract class UUID
 	 *
 	 * @type array
 	 * @param[in] string $uuid A string representation of a UUID.
-	 * @return An array representing the supplied UUID, or \c{null} if an error occurs.
+	 * @param[in] boolean $returnArray if \c{true}, return an array, otherwise return a \class{UUID} instance.
+	 * @return A \class{UUID} instance representing the supplied UUID, or \c{null} if an error occurs.
 	 */
-	public static function parse($uuid)
+	public static function parse($uuid, $returnArray = false)
 	{
-		if(!($uuid = self::canonical($uuid)))
+		if($uuid instanceof UUID)
+		{
+			if($returnArray)
+			{
+				return $uuid->info;
+			}
+			return $uuid;
+		}
+		$info = array();
+		if(!self::updateInfo($info, trim($uuid)))
 		{
 			return null;
 		}
-		$info = array(
-			'time_low' => '', 
-			'time_mid' => '',
-			'time_hi_and_version' => '',
-			'clock_seq_hi_and_reserved' => '',
-			'clock_seq_low' => '',
-			'node' => '',
-			'version' => self::UNKNOWN,
-			'variant' => self::UNKNOWN,
-			);
-		sscanf($uuid, '%8x%4x%4x%2x%2x%12s', $info['time_low'], $info['time_mid'], $info['time_hi_and_version'], $info['clock_seq_hi_and_reserved'], $info['clock_seq_low'], $info['node']);
-		$info['version'] = ($info['time_hi_and_version'] & 0xF000) >> 12;
-		if(($info['clock_seq_hi_and_reserved'] & 0xC0) == 0x80)
+		if($returnArray)
 		{
-			$info['variant'] = self::DCE;
+			return $info;
 		}
-		else if(($info['clock_seq_hi_and_reserved'] & 0xE0) == 0xC0)
-		{
-			$info['variant'] = self::MICROSOFT;
-		}
-		else if(($info['clock_seq_hi_and_reserved'] & 0xE0) == 0xE0)
-		{
-			$info['variant'] = self::RESERVED;
-		}
-		return $info;
+		return new UUID($info);
 	}
 	
 	/**
@@ -292,6 +306,176 @@ abstract class UUID
 	 */
 	public static function unparse($info)
 	{
+		if($info instanceof UUID)
+		{
+			return $info->info['formatted'];
+		}
 		return sprintf('%08x-%04x-%04x-%02x%02x-%12s', $info['time_low'] & 0xFFFFFFFF, $info['time_mid'], $info['time_hi_and_version'], $info['clock_seq_hi_and_reserved'], $info['clock_seq_low'], strtolower($info['node']));
+	}
+	
+	/* Update the version, variant, formatted, iri and canonical members
+	 * of a UUID info block.
+	 */
+	protected static function updateInfo(&$info, $newUuid = null)
+	{
+		if($newUuid !== null)
+		{
+			$info = array(
+				'time_low' => '',
+				'time_mid' => '',
+				'time_hi_and_version' => '',
+				'clock_seq_hi_and_reserved' => '',
+				'clock_seq_low' => '',
+				'node' => '',
+				'version' => self::UNKNOWN,
+				'variant' => self::UNKNOWN,
+				'formatted' => null,
+				'iri' => null,
+				'canonical' => null,
+				);
+			$newUuid = self::canonical($newUuid);
+			if($newUuid === null)
+			{
+				return false;
+			}
+			sscanf($newUuid, '%8x%4x%4x%2x%2x%12s', $info['time_low'], $info['time_mid'], $info['time_hi_and_version'], $info['clock_seq_hi_and_reserved'], $info['clock_seq_low'], $info['node']);
+		}
+		$info['version'] = ($info['time_hi_and_version'] & 0xF000) >> 12;
+		if(($info['clock_seq_hi_and_reserved'] & 0xC0) == 0x80)
+		{
+			$info['variant'] = self::DCE;
+		}
+		else if(($info['clock_seq_hi_and_reserved'] & 0xE0) == 0xC0)
+		{
+			$info['variant'] = self::MICROSOFT;
+		}
+		else if(($info['clock_seq_hi_and_reserved'] & 0xE0) == 0xE0)
+		{
+			$info['variant'] = self::RESERVED;
+		}
+		$info['formatted'] = sprintf('%08x-%04x-%04x-%02x%02x-%12s',
+									 $info['time_low'] & 0xFFFFFFFF,
+									 $info['time_mid'],
+									 $info['time_hi_and_version'],
+									 $info['clock_seq_hi_and_reserved'],
+									 $info['clock_seq_low'],
+									 strtolower($info['node']));
+		$info['iri'] = 'urn:uuid:' . $info['formatted'];
+		$info['canonical'] = str_replace('-', '', $info['formatted']);
+		return true;
+	}
+	
+	protected function __construct($uuid = null)
+	{
+		if(!is_array($uuid))
+		{
+			$this->info = array();
+			if(!strlen($uuid))
+			{
+				$uuid = self::UUID_NULL;
+			}
+			if(!$this->updateInfo($this->info, $uuid))
+			{
+				throw new Exception('Failed to parse UUID string "' . $uuid . '"', E_USER_ERROR);
+			}
+		}
+		else
+		{
+			$this->info = $uuid;
+			$this->updateInfo($this->info);
+		}
+	}
+
+	public function __toString()
+	{
+		return $this->info['formatted'];
+	}
+
+	public function __get($name)
+	{
+		return $this->info[$name];
+	}
+
+	public function __set($name, $value)
+	{
+		if($name === 'formatted' || $name === 'canonical' || $name === 'iri')
+		{
+			$info = array();
+			if(!$this->updateInfo($info, $value))
+			{
+				throw new Exception('Failed to parse UUID string "' . $value . '"', E_USER_ERROR);
+			}
+			$this->info = $info;
+			return;
+		}
+		if(array_key_exists($name, $this->info))
+		{
+			$this->info[$name] = $value;
+			$this->updateInfo($this->info);
+			return;
+		}
+		$this->{$name} = $value;
+	}
+
+	public function __isset($name)
+	{
+		return isset($this->info[$name]) || isset($this->{$name});
+	}
+
+	public function __unset($name)
+	{
+		if(array_key_exists($name, $this->info) || $name === 'info')
+		{
+			trigger_error('Attempt to unset read-only property UUID::$' . $name, E_USER_NOTICE);
+			return;
+		}
+		unset($this->{$name});
+	}
+
+	/* Format a UUID instance */
+	public function format($prefix = null, $suffix = null)
+	{
+		return $prefix . $this->info['formatted'] . $suffix;
+	}	
+
+	public function offsetGet($name)
+	{
+		return $this->info[$name];
+	}
+	
+	public function offsetSet($name, $value)
+	{	   
+		if($name === 'formatted' || $name === 'canonical' || $name === 'iri')
+		{
+			$info = array();
+			if(!$this->updateInfo($info, $value))
+			{
+				throw new Exception('Failed to parse UUID string "' . $value . '"', E_USER_ERROR);
+			}
+			$this->info = $info;
+			return;
+		}
+		if(array_key_exists($name, $this->info))
+		{
+			$this->info[$name] = $value;
+			$this->updateInfo($this->info);
+			return;
+		}
+		$this->{$name} = $value;
+	}
+	
+	public function offsetExists($name)
+	{		
+		return isset($this->info[$name]) || isset($this->{$name});
+	}
+
+	public function offsetUnset($name)
+	{
+		if(array_key_exists($name, $this->info) || $name === 'info')
+		{
+			trigger_error('Attempt to unset read-only property UUID::$' . $name, E_USER_NOTICE);
+			return;
+		}
+		unset($this->{$name});
 	}
 }
