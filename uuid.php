@@ -365,7 +365,7 @@ class UUID implements ArrayAccess
 		return true;
 	}
 	
-	protected function __construct($uuid = null)
+	public function __construct($uuid = null)
 	{
 		if(!is_array($uuid))
 		{
