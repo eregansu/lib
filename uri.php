@@ -79,6 +79,8 @@ class URI implements ArrayAccess
 	protected static $namespaces = array();
 
 	public $scheme = null;
+	public $urnscheme = null;
+	public $data = null;
 	public $port = null;
 	public $host = null;
 	public $user = null;
@@ -109,7 +111,19 @@ class URI implements ArrayAccess
 	 */
 	public static function parseForOptions($url)
 	{
-		static $default = array('scheme' => null, 'host' => null, 'user' => null, 'pass' => null, 'host' => null, 'port' => null, 'path' => null, 'query' => null, 'fragment' => null);
+		static $default = array('scheme' => null, 'host' => null, 'user' => null, 'pass' => null, 'host' => null, 'port' => null, 'path' => null, 'query' => null, 'fragment' => null, 'data' => null, 'urnscheme' => null);
+		
+		$match = array();
+		if(preg_match('!^urn:([a-z0-9+-]+):(.*)$!', $url, $match) && strlen(@$match[2]))
+		{
+			$default['urnscheme'] = $match[1];
+			$default['data'] = $match[2];
+		}
+		else if(preg_match('!^([a-z0-9+-]+):(.*)$!', $url, $match) && strlen(@$match[2]))
+		{			
+			$default['data'] = $match[2];
+		}
+
 		if(!($url = self::parse($url)))
 		{
 			return null;
@@ -140,11 +154,19 @@ class URI implements ArrayAccess
 		/* If the scheme is a string, it's the name of a URI scheme which must be
 		 * looked up.
 		 */
+		if($scheme instanceof URI)
+		{
+			$scheme = $scheme->scheme;
+		}
 		if(is_string($scheme))
 		{
 			self::registerSchemes();
 			if(!isset(self::$schemes[$scheme]))
 			{
+				if(defined('DEBUG_URI_HANDLERS'))
+				{
+					error_log('URI: Scheme "' . $scheme . '" is not registered');
+				}
 				return null;
 			}
 			$info = self::$schemes[$scheme];
@@ -189,17 +211,30 @@ class URI implements ArrayAccess
 			/* The scheme is registered, but no handler of the requested
 			 * type exists.
 			 */
+			if(defined('DEBUG_URI_HANDLERS'))
+			{
+				error_log('URI: No handler of type "' . $handlerType . '" registered for "' . $scheme . '"');
+			}
 			return null;
 		}
 		/* If the handler-type is specified, the class must conform to its matching
 		 * interface.
 		 */
+		if(!class_exists($className))
+		{
+			trigger_error('URI handler class ' . $className . ' (for "' . $scheme . '") does not exist', E_USER_NOTICE);
+			return null;
+		}
 		if(strlen($handlerType))
 		{
 			if(PHP_VERSION_ID >= 50309)
 			{
 				if(!is_subclass_of($className, 'I' . $handlerType, true))
 				{
+					if(defined('DEBUG_URI_HANDLERS'))
+					{
+						error_log('URI: Handler class ' . $className . ' does not implement I' . $handlerType);
+					}					
 					return null;
 				}
 			}
@@ -207,6 +242,10 @@ class URI implements ArrayAccess
 			{
 				if(!is_subclass_of($className, 'I' . $handlerType))
 				{
+					if(defined('DEBUG_URI_HANDLERS'))
+					{
+						error_log('URI: Handler class ' . $className . ' does not implement I' . $handlerType);
+					}					
 					return null;
 				}
 			}
@@ -469,6 +508,7 @@ class URI implements ArrayAccess
 			$url = self::parseForOptions($url);		   
 		}
 		if(isset($url['scheme']) && strlen($url['scheme'])) $this->scheme = $url['scheme'];
+		if(isset($url['urnscheme']) && strlen($url['urnscheme'])) $this->scheme = $url['urnscheme'];
 		if(isset($url['host']) && strlen($url['host'])) $this->host = $url['host'];
 		if(isset($url['port']) && strlen($url['port'])) $this->port = $url['port'];
 		if(isset($url['user']) && strlen($url['user'])) $this->user = $url['user'];
@@ -477,6 +517,7 @@ class URI implements ArrayAccess
 		if(isset($url['query']) && strlen($url['query'])) $this->query = $url['query'];
 		if(isset($url['fragment']) && strlen($url['fragment'])) $this->fragment = $url['fragment'];
 		if(isset($url['options'])) $this->options = $url['options'];
+		if(isset($url['data'])) $this->data = $url['data'];
 		if($base !== null)
 		{
 			if(is_string($base) || is_array($base))
