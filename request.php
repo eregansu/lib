@@ -483,6 +483,7 @@ abstract class Request implements IObservable
 				}
 				if(empty($value['hide']))
 				{
+					$l = null;
 					if(isset($value['location']))
 					{
 						$l = $value['location'];
@@ -500,12 +501,11 @@ abstract class Request implements IObservable
 							$l = $uri . $e;
 							$value['location'] = $l;
 						}
-						else
-						{
-							continue;
-						}
 					}
-					$alternates[] = '{"' . addslashes($l) . '" ' . floatval($value['q']) . ' {type ' . $value['type'] . '}}';
+					if($l !== null)
+					{
+						$alternates[] = '{"' . addslashes($l) . '" ' . floatval($value['q']) . ' {type ' . $value['type'] . '}}';
+					}
 				}
 				if(isset($this->types[$value['type']]))
 				{
