@@ -72,6 +72,7 @@ abstract class Request implements IObservable
 	public $certificateInfo;
 	public $publicKey;
 	public $publicKeyHash;
+	public $headers = array(); /**< Headers supplied as part of the request */
 
 	/* Information identifying the peer performing the request */
 	public $peerIdentification = array();
@@ -688,6 +689,10 @@ class HTTPRequest extends Request
 		}
 		$this->method = strtoupper($_SERVER['REQUEST_METHOD']);
 		if(strpos($this->method, '_') !== false) $this->method = 'GET';
+		if(function_exists('apache_request_headers'))
+		{
+			$this->headers = apache_request_headers();
+		}
 		$this->uri = $_SERVER['REQUEST_URI'];
 		/* On at least some lighttpd+fcgi setups, QUERY_STRING ends up
 		 * empty while REQUEST_URI contains ?query...
