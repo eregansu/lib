@@ -424,7 +424,7 @@ class URI implements ArrayAccess
 	{
 		$qname = strval($uri);
 		$len = strlen($qname);
-		$p = strcspn(strrev($uri), '#?=/ ');
+		$p = strcspn(strrev($uri), '#?=/ :');
 		if($p == $len)
 		{
 			/* No character to split on */
