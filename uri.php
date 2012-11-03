@@ -40,6 +40,8 @@ if(!isset($URI_SCHEMES) && isset($VFS))
 	$URI_SCHEMES =& $VFS;
 }
 
+if(!defined('E_USER_DEPRECATED')) define('E_USER_DEPRECATED', E_USER_NOTICE);
+
 interface IVFS
 {
 }
@@ -481,7 +483,7 @@ class URI implements ArrayAccess
 	 * @return On success, returns a fully-qualified URI. 
 	 * @note If \p{$namespaceURI} is a \c{DOMNode}, \p{$local} must be \c{null}. If \p{$namespaceURI} is a string, \p{$local} must not be \c{null}.
 	 */
-	public static function fqname($namespaceURI, $local = null)
+	public static function qualify($namespaceURI, $local = null)
 	{
 		if($local == null)
 		{
@@ -501,6 +503,11 @@ class URI implements ArrayAccess
 			return $namespaceURI . $local;
 		}
 		return $namespaceURI . ' ' . $local;
+	}
+	
+	public static function fqname($namespaceURI, $local = null)
+	{
+		trigger_error('URI::fqname() is deprecated; use URI::qualify() instead', E_USER_DEPRECATED);
 	}
 
 
