@@ -419,8 +419,8 @@ class URI implements ArrayAccess
 		return null;
 	}
 	
-	/* Contract a URI */
-	public static function contractUri($uri, $alwaysContract = false)
+	/* Contract a URI to prefix:local form */
+	public static function contractUri($uri, $alwaysContract = false, $returnArray = false)
 	{
 		$qname = strval($uri);
 		$len = strlen($qname);
@@ -436,12 +436,21 @@ class URI implements ArrayAccess
 		$prefix = self::prefixForUri($ns, $alwaysContract);
 		if($prefix !== null)
 		{
+			if($returnArray)
+			{
+				return array(
+					'qname' => $prefix . ':' . $lname,
+					'prefix' => $prefix,
+					'ns' => $ns,
+					'local' => $lname,		
+					);
+			}
 			return $prefix . ':' . $lname;
 		}
 		return null;
 	}
 	
-	/* Expand a URI */
+	/* Expand a URI from prefix:local form */
 	public static function expandUri($uri, $asString = false)
 	{
 		$s = explode(':', $uri, 2);
