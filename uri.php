@@ -74,6 +74,7 @@ class URI implements ArrayAccess
 	const exif = 'http://www.kanzaki.com/ns/exif#';
 	const void = 'http://rdfs.org/ns/void#';
 	const olo = 'http://purl.org/ontology/olo/core#';
+	const dav = 'DAV:';
 
 	public static $schemes;
 	
@@ -333,7 +334,8 @@ class URI implements ArrayAccess
 		self::$namespaces[self::gn] = 'gn';
 		self::$namespaces[self::exif] = 'exif';
 		self::$namespaces[self::void] = 'void';
-		self::$namespaces[self::olo] = 'olo';		
+		self::$namespaces[self::olo] = 'olo';
+		self::$namespaces[self::dav] = 'dav';
 	}
 	
 	public static function merge($url, $base, $onlyIfNonEmpty = false)
