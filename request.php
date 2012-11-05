@@ -24,6 +24,8 @@
  * @task Processing requests
  */
 
+if(!defined('INDEX_RESOURCE_NAME')) define('INDEX_RESOURCE_NAME', 'index');
+
 /** 
  * Encapsulation of a request from a client.
  *
@@ -73,7 +75,8 @@ abstract class Request implements IObservable
 	public $publicKey;
 	public $publicKeyHash;
 	public $headers = array(); /**< Headers supplied as part of the request */
-
+	public $negotiatedType = null;
+	
 	/* Information identifying the peer performing the request */
 	public $peerIdentification = array();
 
@@ -276,7 +279,7 @@ abstract class Request implements IObservable
 		}
 		if($this->pageUri == '/')
 		{
-			$this->resource = '/index';
+			$this->resource = '/' . INDEX_RESOURCE_NAME;
 		}
 		else
 		{
@@ -528,6 +531,7 @@ abstract class Request implements IObservable
 			{
 				return 406;
 			}
+			$this->negotiatedType = $type;
 			$headers['Content-Type'] = $type['type'];
 			if(isset($type['location']))
 			{
