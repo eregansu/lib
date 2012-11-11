@@ -25,6 +25,7 @@
  */
 
 if(!defined('INDEX_RESOURCE_NAME')) define('INDEX_RESOURCE_NAME', 'index');
+if(!defined('COOKIE_DOMAIN')) define('COOKIE_DOMAIN', null);
 
 /** 
  * Encapsulation of a request from a client.
@@ -430,6 +431,10 @@ abstract class Request implements IObservable
 	
 	public function setCookie($name, $value = null, $expires = 0, $path = null, $domain = null, $secure = false, $httponly = false)
 	{
+		if($domain === null)
+		{
+			$domain = COOKIE_DOMAIN;
+		}
 		setcookie($name, $value, $expires, $path, $domain, $secure, $httponly);
 	}
 	
@@ -669,7 +674,8 @@ class HTTPRequest extends Request
 	public $absoluteBase = null;
 	public $absolutePage = null;
 	public $secure = false;
-	
+	public $cookies = array();
+
 	protected function init()
 	{
 		parent::init();
@@ -814,6 +820,7 @@ class HTTPRequest extends Request
 		{
 			$this->method = $this->postData['__method'];
 		}
+		$this->cookies =& $_COOKIE;
 	}
 
 	protected function processRequestPayload()
