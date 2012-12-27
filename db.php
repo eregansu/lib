@@ -329,7 +329,11 @@ abstract class Database implements IDatabase
 		}
 		if($name == 'dbName')
 		{
-			return $this->dbName;
+			if(isset($this->dbName))
+			{
+				return $this->dbName;
+			}
+			return $this->params->dbName;
 		}
 		if($name == 'schemaName')
 		{
