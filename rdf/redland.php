@@ -413,7 +413,7 @@ class RDFURI extends RedlandBase
 
 	public function asJSONLD()
 	{
-		return array('@uri' => librdf_uri_to_string($this->resource));
+		return array('@id' => librdf_uri_to_string($this->resource));
 	}
 
 	public function node()
@@ -561,7 +561,12 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 	public $subject;
 	public /*internal*/ $model;
 	public /*internal*/ $subsidiaries = array();
-
+	
+	/* List of known predicates for use with JSON-LD */
+	public $knownPredicates = null;
+	/* JSON-LD Context URI */
+	public $contextUri = null;
+	
 	public function __construct($uri = null, $type = null, $world = null)
 	{
 		$this->world = RedlandBase::world($world);	
@@ -1156,46 +1161,193 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 			return array('type' => 'node', 'value' => $predicates);
 		}
 	}
+	
+	public function context($doc)
+	{
+		$predicates = $this->knownPredicates();
+		$context = array();
+		foreach($predicates as $full => $info)
+		{
+			if(isset($info['@@as']))
+			{
+				$key = $info['@@as'];
+				unset($info['@@as']);				
+				if(isset($context[$key]))
+				{
+					continue;
+				}
+				$nn = $doc->namespacedName($full, false);
+				if($nn !== null)
+				{
+					$info['@id'] = $nn;
+				}
+				if(count($info) == 1 && isset($info['@id']))
+				{
+					$context[$key] = $info['@id'];
+				}
+				else
+				{
+					$context[$key] = $info;
+				}
+				continue;
+			}
+			$nn = $doc->namespacedName($full, false);
+			if($nn === null || isset($context[$nn]))
+			{
+				if(count($info) == 1 && isset($info['@id']))
+				{
+					/* No point in having a <full> => <full> entry */
+					continue;
+				}
+				$context[$full] = $info;
+				continue;
+			}
+			$context[$nn] = $info;
+		}
+		$nslist = URI::namespaces();
+		foreach($nslist as $uri => $prefix)
+		{
+			if(!strcmp($uri, 'http://www.w3.org/XML/1998/namespace') ||
+				!strcmp($uri, 'http://www.w3.org/2000/xmlns/') ||
+				!strcmp($uri, 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'))
+			{
+				continue;
+			}
+			$context[$prefix] = $uri;
+		}
+		return $context;
+	}
+
+	protected function knownPredicates()
+	{
+		$predicateList = $this->knownPredicates;
+		if(!is_array($predicateList))
+		{
+			$predicateList = array();
+		}
+		foreach($predicateList as $full => $info)
+		{
+			if(isset($info['@@as']) && !isset($info['@id']))
+			{
+				$predicateList[$full]['@id'] = $full;
+			}
+		}
+		$bareProps = RDF::barePredicates();
+		$uriProps = RDF::uriPredicates();
+		foreach($bareProps as $short => $full)
+		{
+			if(is_array($full))
+			{
+				$info = $full;
+				$full = URI::expandUri($info['@id'], true);
+			}
+			else
+			{
+				$info = array('@id' => $full);
+			}
+			$info['@@as'] = $short;
+			if(isset($predicateList[$full]))			
+			{
+				continue;
+			}			
+			$predicateList[$full] = $info;
+		}
+		foreach($uriProps as $full)
+		{
+			$info['@type'] = '@id';
+			if(isset($predicateList[$full]))			
+			{
+				continue;
+			}			
+			$predicateList[$full] = $info;
+		}
+		return $predicateList;
+	}
 
 	/* Transform this instance into a native array which can itself be
 	 * serialised as JSON to result in JSON-LD.
 	 */
 	public function asJSONLD($doc)
 	{
-		$array = array('@context' => array(), '@subject' => null, '@type' => null);
+		$array = array('@context' => array(), '@id' => null, '@type' => null);
 		$isArray = array();
 		$up = array();
-		$bareProps = RDF::barePredicates();
-		$uriProps = RDF::uriPredicates();
+		$predicates = $this->knownPredicates();
 		$props = $this->predicateObjectList();
-		$array['@subject'] = strval($this->subject->asUri());
+		$array['@id'] = strval($this->subject->asUri());
 		foreach($props as $name => $values)
 		{
 			if(strpos($name, ':') === false) continue;
 			if(!is_array($values)) continue;
+			/* Special-case: @id */
 			if(!strcmp($name, RDF::rdf.'about'))
 			{
-				$name = $kn = '@subject';
+				$name = $kn = '@id';
+				foreach($values as $v)
+				{
+					$array[$kn] = $v;
+					break;
+				}
+				continue;
 			}
-			else if(!strcmp($name, RDF::rdf.'type'))
+			/* Special-case: @type */
+			if(!strcmp($name, RDF::rdf.'type'))
 			{
 				$name = $kn = '@type';
+				foreach($values as $v)
+				{
+					$nn = $doc->namespacedName($v, true);
+					$nslist = URI::namespaces();
+					$x = explode(':', $nn, 2);
+					if(count($x) == 2)
+					{
+						if(!isset($array['@context'][$x[0]]))
+						{
+							$ns = array_search($x[0], $nslist);
+							$array['@context'][$x[0]] = $ns;
+						}
+						$array[$kn][] = $nn;
+					}
+					else
+					{
+						$array[$kn] = $v;
+					}
+				}
+				continue;
 			}
-			else if(($kn = array_search($name, $bareProps)) !== false)
+			/* Handle known predicates */
+			if(isset($predicates[$name]) && isset($predicates[$name]['@@as']))			
 			{
+				$kn = $predicates[$name]['@@as'];
 				if(!isset($array['@context'][$kn]))
 				{
-					$array['@context'][$kn] = $name;
+					$info = $predicates[$name];
+					unset($info['@@as']);
+					if(!count($info) || (count($info) == 1 && isset($info['@id'])))
+					{
+						$array['@context'][$kn] = $name;
+					}
+					else
+					{
+						$array['@context'][$kn] = $info;
+					}
 				}
 			}
+			/* Handle predicates in known namespaces */
 			else
 			{
 				$kn = $doc->namespacedName($name, true);
+				$nslist = URI::namespaces();
 				$x = explode(':', $kn, 2);
 				if(count($x) == 2 && !isset($array['@context'][$x[0]]))
 				{
-					$ns = array_search($x[0], $doc->namespaces);
+					$ns = array_search($x[0], $nslist);
 					$array['@context'][$x[0]] = $ns;
+				}
+				/* Handle known predicates */			
+				if(isset($predicates[$name]) && !isset($array['@context'][$kn]))
+				{
+					$array['@context'][$kn] = $predicates[$name];
 				}
 			}
 			foreach($values as $v)
@@ -1212,15 +1364,30 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 				{
 					$value = strval($v);
 				}
-				if(($kn == '@' || $kn == 'a' || in_array($name, $uriProps)) && is_array($value))
+				if($kn == '@' || $kn == 'a' ||
+					(is_array($value) && isset($predicates[$name]) && isset($predicates[$name]['@type']) && $predicates[$name]['@type'] == '@id')) 
 				{
 					if($kn != '@' && $kn != 'a')
 					{
 						$up[$name] = $kn;
 					}
-					if(isset($value['@uri']))
+					if(isset($value['@id']))
 					{
-						$value = $value['@uri'];
+						$value = $value['@id'];
+					}
+				}
+				else if(is_array($value) && isset($predicates[$name]['@type']))
+				{
+					/* If this is a known predicate with a specified type and the type of
+					 * the value matches, we can reduce the value to simply a literal.
+					 */
+					if(isset($value['@type']) && !strcmp($value['@type'], $predicates[$name]['@type']))
+					{
+						unset($value['@type']);
+						if(count($value) == 1 && isset($value['@value']))
+						{
+							$value = $value['@value'];
+						}
 					}
 				}
 				if(isset($array[$kn]))
@@ -1238,16 +1405,9 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 				}
 			}
 		}
-		if(count($up))
+		if(count($array['@type']) == 1)
 		{
-			$array['@context']['@coerce']['xsd:anyURI'] = array();
-			foreach($uriProps as $uri)
-			{
-				if(isset($up[$uri]))
-				{
-					$array['@context']['@coerce']['xsd:anyURI'][] = $up[$uri];
-				}
-			}
+			$array['@type'] = $array['@type'][0];
 		}
 		if(!isset($array['@']))
 		{
@@ -1256,6 +1416,10 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 		if(!isset($array['a']))
 		{
 			unset($array['a']);
+		}
+		if(isset($this->contextUri))
+		{
+			$array['@context'] = strval($this->contextUri);
 		}
 		return $array;
 	}
@@ -1388,14 +1552,14 @@ class RDFComplexLiteral extends RedlandNode
 		$t = $this->type();
 		if(strlen($l) || strlen($t))
 		{
-			$a = array('@literal' => $this->value);
+			$a = array('@value' => $this->value);
 			if(strlen($l))
 			{
 				$a['@language'] = $l;
 			}
 			if(strlen($t))
 			{
-				$a['@datatype'] = $t;
+				$a['@type'] = $t;
 			}
 			return $a;
 		}
@@ -1432,6 +1596,9 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 	public $htmlPostBody = null;
 	public $htmlLinks = array();
 	public $htmlTitle = null;
+
+	public $knownPredicates = array();
+	public $contextUri = null;
 
 	protected $qnames = array();
 	protected $positions = array();
@@ -1523,16 +1690,15 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 			{
 				$request->header('Content-type', $type);
 			}
-			$output = $this->asJSONLD();
+			$output = $this->asJSONLD($type, $request, $sendHeaders);
 		}
 		else if($type == 'application/ld+json')
 		{
-			$type = 'application/json';
 			if($sendHeaders)
 			{
 				$request->header('Content-type', $type);
 			}
-			$output = $this->asJSONLD();
+			$output = $this->asJSONLD($type, $request, $sendHeaders);
 		}			
 		else if($type == 'application/rdf+json' || $type == 'application/x-rdf+json')
 		{
@@ -1589,6 +1755,14 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 		librdf_model_add_statements($this->resource, $statements);
 		$inst->model = $this;
 		librdf_model_sync($this->resource);
+		if(!isset($inst->knownPredicates))
+		{
+			$inst->knownPredicates = $this->knownPredicates;
+		}
+		if(!isset($inst->contextUri))
+		{
+			$inst->contextUri = $this->contextUri;
+		}
 		return $inst;
 	}
 
@@ -1783,7 +1957,7 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 		return $ser->serializeModelToString($this);
 	}
 
-	public function asJSONLD()
+	public function asJSONLD($type = 'application/ld+json', $request, $sendHeaders)
 	{
 		$array = array();
 		$subjects = array();
@@ -1833,7 +2007,26 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 			{
 				$array[] = $obj->asJSONLD($this);
 			}			
-		}			
+		}
+		if(!strcmp($type, 'application/json') && isset($this->contextUri))
+		{
+			if($sendHeaders)
+			{
+				$request->header('Link', '<' . $this->contextUri . '>; rel="http://www.w3.org/ns/json-ld#context"; type="application/ld+json"', false);
+			}
+			foreach($array as $k => $subj)
+			{
+				unset($array[$k]['@context']);				
+			}
+		}
+		if(count($array) == 1)
+		{
+			foreach($array as $subj)
+			{
+				$array = $subj;
+				break;
+			}
+		}
 		return str_replace('\/', '/', json_encode($array));		
 	}
 	
@@ -1999,7 +2192,15 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 		{
 			$inst->{RDF::rdf.'type'} = new RDFURI($type);
 		}
-		$inst->transform();			
+		$inst->transform();
+		if(!isset($inst->knownPredicates))
+		{
+			$inst->knownPredicates = $this->knownPredicates;
+		}
+		if(!isset($inst->contextUri))
+		{
+			$inst->contextUri = $this->contextUri;
+		}			
 		return $inst;
 	}
 
