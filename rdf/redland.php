@@ -1011,6 +1011,24 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 		return $localId;
 	}
 
+	protected function generateLink($target, $text, $predicate, $doc)
+	{
+		if(isset($doc->linkFilter))
+		{
+			$r = call_user_func($doc->linkFilter, $target, $text, $predicate, $doc, $this);
+			if($r !== null)
+			{
+				return $r;
+			}
+		}
+		return '<a href="' . _e($target) . '">' . _e($text) . '</a>';
+	}
+
+	public function htmlLinkId()
+	{
+		return 'local-' . md5(librdf_node_to_string($this->subject->resource));
+	}
+
 	public function asHTML($doc)
 	{
 		$buf = array();
@@ -1037,7 +1055,7 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 		$prev = null;
 		if(librdf_node_is_resource($this->subject->resource))
 		{
-			$buf[] = '<tr><td>@</td><td><p><a href="' . _e($subj) . '">' . _e($subj) . '</a></p></td></tr>';
+			$buf[] = '<tr><td>@</td><td><p>' . $this->generateLink($subj, $subj, URI::rdf.'about', $doc) . '</p></td></tr>';
 		}
 		else
 		{
@@ -1070,7 +1088,7 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 				{
 					$dt = librdf_uri_to_string($dt);
 					$short = $doc->namespacedName($dt, false);
-					$row[] = '(<a href="' . _e($dt) . '">' . _e($short) . '</a>)';
+					$row[] = '(' . $this->generateLink($dt, $short, URI::rdf.'datatype', $doc) . ')';
 				}
 				$row[] = '</p>';
 			}
@@ -1082,12 +1100,12 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 					$link = '#' . $this->idForNode($object, $doc);
 				}
 				$short = $doc->namespacedName($target, false);
-				$row[] = '<a href="' . _e($link) . '">' . _e($short) . '</a>';
+				$row[] = $this->generateLink($link, $short, $predicate, $doc);
 			}
 			else if(librdf_node_is_blank($object))
 			{
 				$link = '#' . $this->idForNode($object, $doc);
-				$row[] = '<a href="' . _e($link) . '">' . _e(librdf_node_to_string($object)) . '</a>';
+				$row[] = $this->generateLink($link, librdf_node_to_string($object), $predicate, $doc);
 			}				
 			$row[] = '</td>';
 			$values[] = implode("\n", $row);
@@ -1126,7 +1144,7 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 		{
 			$span = '';
 		}
-		$buf[] = '<td class="predicate"' . $span . '><a href="' . _e($predicate) . '">' . $short . '</a></td>';
+		$buf[] = '<td class="predicate"' . $span . '>' . $this->generateLink($predicate, $short, null, $doc) . '</td>';
 		foreach($values as $val)
 		{
 			$buf[] = $val;
@@ -1580,9 +1598,12 @@ class RDFXMLLiteral extends RDFComplexLiteral
 class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 {
 	public static $parseableTypes = array(
-		'application/rdf+xml',
 		'text/turtle',
+		'application/x-turtle',
 		'text/n3',
+		'application/rdf+xml',
+		'text/html',
+		'application/xhtml+xml',
 		);
 
 	public $fileURI;
@@ -1602,6 +1623,12 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 
 	protected $qnames = array();
 	protected $positions = array();
+
+	/* Callback for generating links in HTML views; invoked as
+	 * filter($target, $predicate, $text, $subj, $doc)
+	 * $predicate is null if the link is to a predicate itself
+	 */
+	public $linkFilter = null;
 
 	public function __construct($fileURI = null, $primaryTopic = null, $storage = null, $options = null, $world = null)
 	{
@@ -1623,6 +1650,7 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 			$parser = new RedlandRDFXMLParser();
 			break;
 		case 'text/turtle':
+		case 'application/x-turtle':
 			$parser = new RedlandTurtleParser();
 			break;
 		default:
