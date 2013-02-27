@@ -79,6 +79,7 @@ class URI implements ArrayAccess
 	public static $schemes;
 	
 	protected static $registered = false;
+	protected static $unregistered = false;
 	protected static $namespaces = array();
 
 	public $scheme = null;
@@ -306,16 +307,23 @@ class URI implements ArrayAccess
 		}
 	}
 	
+	/* Unregister all prefixes */
+	public static function unregisterPrefixes()
+	{
+		self::$namespaces = array();
+		self::$unregistered = true;
+	}
+	
 	/* Register all of the known URI prefixes */
 	public static /*internal*/ function registerPrefixes()
 	{
-		if(count(self::$namespaces))
+		if(count(self::$namespaces) || self::$unregistered)
 		{
 			return;
 		}
 		self::$namespaces = array();
 		self::$namespaces[self::xml] = 'xml';
-		self::$namespaces[self::xmlns] = 'xmlms';
+		self::$namespaces[self::xmlns] = 'xmlns';
 		self::$namespaces[self::rdf] = 'rdf';
 		self::$namespaces[self::rdfs] = 'rdfs';
 		self::$namespaces[self::owl] = 'owl';
@@ -379,6 +387,7 @@ class URI implements ArrayAccess
 	/* Retrieve the list of registered namespace prefixes as a list of uri => prefix */
 	public static function namespaces()
 	{
+		self::registerPrefixes();
 		return self::$namespaces;
 	}
 	
