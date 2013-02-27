@@ -179,10 +179,6 @@ abstract class RDF extends URI
 		{
 			return self::documentFromHTML($doc, $location, $curl);
 		}
-		if(self::isXML($doc, $ct))
-		{
-			return self::documentFromXMLString($doc, $location, $curl);
-		}
 		error_log('RDF::documentFromURL(): Unable to parse ' . $location . ' with type ' . $ct);
 		return null;
 	}
@@ -254,16 +250,18 @@ abstract class RDF extends URI
 	 */
 	protected static function documentFromHTML($doc, $location, $curl = null)
 	{
-		require_once(dirname(__FILE__) . '/../simplehtmldom/simple_html_dom.php');
-		$html = new simple_html_dom();
-		$html->load($doc);
+		$dom = new DOMDocument();
+		libxml_use_internal_errors(true);
+		$dom->loadHTML($doc);
+		libxml_use_internal_errors(false);
 		$links = array();
-		foreach($html->find('link') as $link)
+		$list = $dom->getElementsByTagName('link');
+		foreach($list as $link)
 		{
 			$l = array(
-				'rel' => @$link->attr['rel'],
-				'type' => @$link->attr['type'],
-				'href' => @$link->attr['href'],
+				'rel' => $link->getAttribute('rel'),
+				'type' => $link->getAttribute('type'),
+				'href' => $link->getAttribute('href'),
 				);
 			if(strlen($l['rel']) &&
 			   strpos(' ' . $l['rel'] . ' ', ' alternate ') === false &&
@@ -271,38 +269,28 @@ abstract class RDF extends URI
 			{
 				continue;
 			}
-			if(!strcmp($l['type'], 'application/rdf+xml'))
+			if(!strlen($l['href']) || $l['type'] == 'text/html' || $l['type'] == 'application/xhtml+xml')
 			{
-				$links['rdf'] = $l;
+				continue;
+			}			
+			if(in_array($l['type'], RDFDocument::$parseableTypes))
+			{
+				$links[] = $l;
 			}
-			$links[] = $l;
 		}
-		if(isset($links['rdf']))
-		{
-			$href = new URL($links['rdf']['href'], $location);
-		}
-		else
-		{
-			$href = $location;
-			if(false !== ($p = strrpos($href, '#')))
+		foreach($links as $link)
+		{			
+			$href = new URL($link['href'], $location);
+			$doc = self::fetch($href, $ct, RDFDocument::$parseableTypes, $curl);
+			if($ct == 'text/html' || $ct == 'application/xhtml+xml')
 			{
-				$href = substr($href, 0, $p);
+				continue;
 			}
-			if(false !== ($p = strrpos($href, '.html')))
+			$d = new RDFDocument(strval($href));
+			if($d->parse($ct, $doc))
 			{
-				$href = substr($href, 0, $p);
+				return $d;
 			}
-			if(substr($href, -1) == '/')
-			{
-				$href = substr($href, 0, -1);
-			}
-			$href .= '.rdf';
-		}
-		/* XXX This should obtain the list of acceptable types from RDFDocument */
-		$doc = self::fetch($href, $ct, RDFDocument::$parseableTypes, $curl);
-		if(self::isXML($doc, $ct))
-		{
-			return self::documentFromXMLString($doc, $href);
 		}
 		return null;
 	}
@@ -334,6 +322,10 @@ abstract class RDF extends URI
 			$curl->unrestrictedAuth = true;
 			$curl->httpAuth = Curl::AUTH_ANYSAFE;
 		}
+		else
+		{
+			$curl->url = $url;
+		}
 		$curl->returnTransfer = true;
 		$curl->fetchHeaders = false;
 		$headers = $curl->headers;
@@ -356,11 +348,6 @@ abstract class RDF extends URI
 		if(intval($info['http_code']) > 399)
 		{
 			error_log('RDF::fetch(): Fetching ' . $url . ': HTTP status ' . $info['http_code']);
-/*			echo '<pre>';
-			print_r($curl);
-			echo '</pre>';
-			echo "RDF::fetch(): HTTP status " . $info['http_code'] . "\n";
-			throw new Exception($curl->receivedHeaders['status'], $info['http_code']); */
 			return null;
 		}
 		$c = explode(';', $info['content_type']);
