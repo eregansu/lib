@@ -197,6 +197,7 @@ abstract class MIME
 		'text/xml' => array('xml'),
 		'text/turtle' => array('ttl'),
 		'text/n3' => array('n3'),
+		'text/rdf+n3' => array('n3'),
 		'text/javascript' => array('js'),
 
 		'application/xml' => array('xml'),
@@ -216,6 +217,8 @@ abstract class MIME
 		'application/ld+json' => array('jsonld'),
 		'application/rdf+json' => array('rj', 'rdfjson'),
 		'application/x-yaml' => array('yaml'),
+		'application/n3' => array('n3'),
+		'application/n-triples' => array('nt'),
 		
 		'application/x-pem-file' => array('pem'),
 		'application/x-pkcs12' => array('pfx', 'p12'),

@@ -1737,13 +1737,21 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 			}
 			$output = $this->asJSON();
 		}
-		else if($type == 'text/n3')
+		else if($type == 'text/n3' || $type == 'application/n3' || $type == 'text/rdf+n3')
 		{
 			if($sendHeaders)
 			{
 				$request->header('Content-type', $type);
 			}
 			$output = $this->asN3();
+		}
+		else if($type == 'application/n-triples' || $type == 'text/plain')
+		{
+			if($sendHeaders)
+			{
+				$request->header('Content-type', $type);
+			}
+			$output = $this->asNTriples();
 		}
 		else
 		{
@@ -1970,6 +1978,12 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 	public function asN3()
 	{
 		$ser = new RedlandN3Serializer();
+		return $ser->serializeModelToString($this);
+	}
+
+	public function asNTriples()
+	{
+		$ser = new RedlandNTriplesSerializer();
 		return $ser->serializeModelToString($this);
 	}
 
