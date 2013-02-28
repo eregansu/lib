@@ -261,6 +261,22 @@ class RedlandTurtleParser extends RedlandParser
 	}
 }
 
+class RedlandN3Parser extends RedlandParser
+{
+	public function __construct($name = 'turtle', $mime = null, $type = null, $world = null)
+	{
+		parent::__construct($name, $mime, $type, $world);
+	}
+}
+
+class RedlandNTriplesParser extends RedlandParser
+{
+	public function __construct($name = 'ntriples', $mime = null, $type = null, $world = null)
+	{
+		parent::__construct($name, $mime, $type, $world);
+	}
+}
+
 class RedlandNode extends RedlandBase
 {
 	public static function blank($world = null)
@@ -1604,6 +1620,7 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 		'application/rdf+xml',
 		'text/html',
 		'application/xhtml+xml',
+		'application/ntriples',
 		);
 
 	public $fileURI;
@@ -1653,6 +1670,14 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 		case 'application/x-turtle':
 			$parser = new RedlandTurtleParser();
 			break;
+		case 'text/n3':
+		case 'application/n3':
+		case 'text/rdf+n3':
+			$parser = new RedlandN3Parser();
+			break;
+		case 'text/plain':
+		case 'application/n-triples':
+			$parser = new RedlandNTriplesParser();
 		default:
 			return false;
 		}
