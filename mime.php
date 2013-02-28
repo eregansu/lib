@@ -199,6 +199,7 @@ abstract class MIME
 		'text/n3' => array('n3'),
 		'text/rdf+n3' => array('n3'),
 		'text/javascript' => array('js'),
+		'text/x-nquads' => array('nq'),
 
 		'application/xml' => array('xml'),
 		'application/xhtml+xml' => array('xhtml'),
@@ -210,6 +211,8 @@ abstract class MIME
 		'application/vnd.sun.wadl+xml' => array('wadl'),
 		'application/xrd+xml' => array('xrd'),
 		'application/opensearchdescription+xml' => array('osd'),
+		/* Note that application/x-xmp+xml is never sent; it's a pseudotype */
+		'application/x-xmp+xml' => array('xmp'),
 
 		'application/json' => array('json'),
 		/* Note that application/x-jsonp is never sent; it's a pseudotype */
@@ -219,6 +222,7 @@ abstract class MIME
 		'application/x-yaml' => array('yaml'),
 		'application/n3' => array('n3'),
 		'application/n-triples' => array('nt'),
+		'application/x-trig' => array('trig'),
 		
 		'application/x-pem-file' => array('pem'),
 		'application/x-pkcs12' => array('pfx', 'p12'),

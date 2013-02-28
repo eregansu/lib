@@ -166,6 +166,14 @@ abstract class RDF extends URI
 		{
 			error_log('RDF::documentFromURL(): Fetched ' . $location . ' with content type ' . $ct);
 		}
+		if(self::isHTML($doc, $ct))
+		{
+			$r = self::documentFromHTML($doc, $location, $curl);
+			if($r !== null)
+			{
+				return $r;
+			}
+		}
 		if(in_array($ct, RDFDocument::$parseableTypes))
 		{
 			$d = new RDFDocument($location);
@@ -174,10 +182,6 @@ abstract class RDF extends URI
 				return $d;
 			}
 			error_log('RDF::documentFromURL(): RDFDocument::parse() failed for ' . $location . ' with type '. $ct);
-		}
-		if(self::isHTML($doc, $ct))
-		{
-			return self::documentFromHTML($doc, $location, $curl);
 		}
 		error_log('RDF::documentFromURL(): Unable to parse ' . $location . ' with type ' . $ct);
 		return null;

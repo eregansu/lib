@@ -277,6 +277,22 @@ class RedlandNTriplesParser extends RedlandParser
 	}
 }
 
+class RedlandRDFaParser extends RedlandParser
+{
+	public function __construct($name = 'rdfa', $mime = null, $type = null, $world = null)
+	{
+		parent::__construct($name, $mime, $type, $world);
+	}
+}
+
+class RedlandTriGParser extends RedlandParser
+{
+	public function __construct($name = 'trig', $mime = null, $type = null, $world = null)
+	{
+		parent::__construct($name, $mime, $type, $world);
+	}
+}
+
 class RedlandNode extends RedlandBase
 {
 	public static function blank($world = null)
@@ -550,6 +566,14 @@ class RedlandRDFXMLSerializer extends RedlandSerializer
 	}
 }
 
+class RedlandXMPSerializer extends RedlandSerializer
+{
+	public function __construct($name = 'rdfxml-xmp', $mime = null, $uri = null, $world = null)
+	{
+		parent::__construct($name, $mime, $uri, $world);
+	}
+}
+
 class RedlandJSONSerializer extends RedlandSerializer
 {
 	public function __construct($name = 'json', $mime = null, $uri = null, $world = null)
@@ -569,6 +593,15 @@ class RedlandJSONTriplesSerializer extends RedlandSerializer
 class RedlandNTriplesSerializer extends RedlandSerializer
 {
 	public function __construct($name = 'ntriples', $mime = null, $uri = null, $world = null)
+	{
+		parent::__construct($name, $mime, $uri, $world);
+	}
+}
+
+
+class RedlandNQuadsSerializer extends RedlandSerializer
+{
+	public function __construct($name = 'nquads', $mime = null, $uri = null, $world = null)
 	{
 		parent::__construct($name, $mime, $uri, $world);
 	}
@@ -1625,6 +1658,19 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 		'application/ntriples',
 		);
 
+	protected static $serialisations = array(
+		'text/turtle' => array('title' => 'Turtle'),
+		'application/rdf+xml' => array('title' => 'RDF/XML'),
+		'application/n3' => array('title' => 'N3'),
+		'application/n-triples' => array('title' => 'N-Triples', 'alt' => array('text/plain' => 'Text')),
+		'text/n3' => array('title' => 'N3', 'hide' => true),
+		'text/plain' => array('title' => 'N-Triples', 'hide' => true),
+		'text/rdf+n3' => array('title' => 'N3', 'hide' => true),
+		'application/ld+json' => array('title' => 'JSON-LD', 'hide' => true),
+		'application/json' => array('title' => 'JSON', 'alt' => array('application/ld+json' => 'JSON-LD')),
+		'application/x-xmp+xml' => array('title' => 'Adobe XMP', 'hide' => true),
+		);
+
 	public $fileURI;
 	public $primaryTopic;
 	public $rdfInstanceClass = 'RDFInstance';
@@ -1680,6 +1726,11 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 		case 'text/plain':
 		case 'application/n-triples':
 			$parser = new RedlandNTriplesParser();
+			break;
+		case 'text/html':
+		case 'application/xhtml+xml':
+			$parser = new RedlandRDFaParser();
+			break;
 		default:
 			return false;
 		}
@@ -1698,6 +1749,11 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 			}
 		}
 		return $inst;		
+	}
+
+	public function serialisations()
+	{
+		return self::$serialisations;
 	}
 
 	/* ISerialisable::serialise */
@@ -1739,7 +1795,7 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 			}			
 			$output = $this->asXML();
 		}
-		else if($type == 'application/json')
+		else if($type == 'application/json' || $type == 'text/javascript')
 		{
 			if($sendHeaders)
 			{
@@ -1779,6 +1835,22 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 				$request->header('Content-type', $type);
 			}
 			$output = $this->asNTriples();
+		}
+		else if($type == 'text/x-nquads')
+		{
+			if($sendHeaders)
+			{
+				$request->header('Content-type', $type);
+			}
+			$output = $this->asNQuads();
+		}
+		else if($type == 'application/x-xmp+xml')
+		{
+			if($sendHeaders)
+			{
+				$request->header('Content-type', 'text/xml');
+			}
+			$output = $this->asXMP();
 		}
 		else
 		{
@@ -2008,9 +2080,21 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 		return $ser->serializeModelToString($this);
 	}
 
+	public function asNQuads()
+	{
+		$ser = new RedlandNQuadsSerializer();
+		return $ser->serializeModelToString($this);
+	}
+
 	public function asNTriples()
 	{
 		$ser = new RedlandNTriplesSerializer();
+		return $ser->serializeModelToString($this);
+	}
+
+	public function asXMP()
+	{
+		$ser = new RedlandXMPSerializer();
 		return $ser->serializeModelToString($this);
 	}
 
