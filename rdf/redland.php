@@ -503,6 +503,7 @@ class RedlandSerializer extends RedlandBase
 		$ns = URI::namespaces();
 		foreach($ns as $uri => $prefix)
 		{
+			if($uri == 'xml' || $uri == 'xmlns') continue;
 			librdf_serializer_set_namespace($this->resource, librdf_new_uri($this->world->resource, $uri), $prefix);
 		}
 		return librdf_serializer_serialize_model_to_string($this->resource, self::parseURI($baseURI, $this->world), $model->resource);
@@ -513,6 +514,7 @@ class RedlandSerializer extends RedlandBase
 		$ns = URI::namespaces();
 		foreach($ns as $uri => $prefix)
 		{
+			if($uri == 'xml' || $uri == 'xmlns') continue;
 			librdf_serializer_set_namespace($this->resource, librdf_new_uri($this->world->resource, $uri), $prefix);
 		}
 		return librdf_serializer_serialize_model_to_string($this->resource, $fileName, self::parseURI($baseURI, $this->world), $model->resource);
