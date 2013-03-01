@@ -548,11 +548,15 @@ class RDFInstance extends RDFInstanceBase
 	{
 		return $this->lang(array(
 			URI::skos.'prefLabel',
+			'http://www.w3.org/2004/02/skos/core#prefLabel',
 			URI::gn.'name',
 			URI::foaf.'name',
 			URI::rdfs.'label',
 			URI::dcterms.'title',
-			URI::dc.'title'), $langs, $fallbackFirst);
+			URI::dc.'title',
+			URI::skos.'altLabel',
+			'http://www.w3.org/2004/02/skos/core#altLabel',
+			), $langs, $fallbackFirst);
 	}
 
 	public function description($langs = null, $fallbackFirst = true)
