@@ -1652,6 +1652,8 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 		'text/turtle',
 		'application/x-turtle',
 		'text/n3',
+		'text/rdf+n3',
+		'application/n3',
 		'application/rdf+xml',
 		'text/html',
 		'application/xhtml+xml',
