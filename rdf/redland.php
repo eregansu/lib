@@ -1072,12 +1072,34 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 				return $r;
 			}
 		}
+		if($predicate === null && !strcmp($target, RDF::rdf.'about'))
+		{
+			return '@';
+		}
+		if($predicate === null && !strcmp($target, RDF::rdf.'type'))
+		{
+			return 'a';
+		}
 		return '<a href="' . _e($target) . '">' . _e($text) . '</a>';
 	}
 
 	public function htmlLinkId()
 	{
 		return 'local-' . md5(librdf_node_to_string($this->subject->resource));
+	}
+
+	protected function generateCaption($link, $subject)
+	{
+		$title = $this->title();
+		if(!strlen($title))
+		{
+			$title = $subject;
+		}
+		if($link !== null)
+		{
+			return '<a title="' . _e($subject) . '" href="' . _e($link) . '">' . _e($title) . '</a>';
+		}
+		return '<span title="' . _e($subject) . '">' . _e($title) . '</span>';
 	}
 
 	public function asHTML($doc)
@@ -1087,12 +1109,13 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 		$subj = $this->subject();
 		if(librdf_node_is_resource($this->subject->resource))
 		{
-			$buf[] = '<caption><a href="' . _e($subj) . '">' . _e($subj) . '</a></caption>';
+			$link = $subj;
 		}
 		else
 		{
-			$buf[] = '<caption>' . _e($subj) . '</caption>';
+			$link = null;
 		}
+		$buf[] = '<caption>' . $this->generateCaption($link, $subj) . '</caption>';
 		$buf[] = '<thead>';
 		$buf[] = '<tr>';
 		$buf[] = '<th class="predicate" scope="col">Property</th>';
@@ -1106,11 +1129,11 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 		$prev = null;
 		if(librdf_node_is_resource($this->subject->resource))
 		{
-			$buf[] = '<tr><td>@</td><td><p>' . $this->generateLink($subj, $subj, URI::rdf.'about', $doc) . '</p></td></tr>';
+			$buf[] = '<tr><td>' . $this->generateLink(RDF::rdf.'about', '@', null, $doc) . '</td><td><p>' . $this->generateLink($subj, $subj, URI::rdf.'about', $doc) . '</p></td></tr>';
 		}
 		else
 		{
-			$buf[] = '<tr><td>@</td><td><p>' . _e($subj) . '</p></td>';
+			$buf[] = '<tr><td>' . $this->generateLink(RDF::rdf.'about', '@', null, $doc) . '</td><td><p>' . _e($subj) . '</p></td>';
 		}
 
 		while(!librdf_stream_end($rs))
@@ -1179,12 +1202,13 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 		}
 		else if(!strcmp($predicate, RDF::rdf.'type'))
 		{
-			$short = 'a';
+			$short = 'is a';
 		}
 		else
 		{
 			$short = $doc->namespacedName($predicate, true);
 		}
+		$link = $this->generateLink($predicate, $short, null, $doc);
 		$buf[] = '<tr>';
 		$count = count($values);
 		if($count > 1)
@@ -1195,7 +1219,7 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 		{
 			$span = '';
 		}
-		$buf[] = '<td class="predicate"' . $span . '>' . $this->generateLink($predicate, $short, null, $doc) . '</td>';
+		$buf[] = '<td class="predicate"' . $span . '>' . $link . '</td>';
 		foreach($values as $val)
 		{
 			$buf[] = $val;
