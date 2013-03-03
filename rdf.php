@@ -168,7 +168,8 @@ abstract class RDF extends URI
 		}
 		if(self::isHTML($doc, $ct))
 		{
-			$r = self::documentFromHTML($doc, $location, $curl);
+			$info = $curl->info;
+			$r = self::documentFromHTML($doc, $info['url'], $curl);
 			if($r !== null)
 			{
 				return $r;
@@ -347,8 +348,8 @@ abstract class RDF extends URI
 		$accept[] = '*/*;q=0.5';
 		$curl->headers['Accept'] = implode(',', $accept);
 		$buf = $curl->exec();
-		$info = $curl->info;
 		$curl->headers = $headers;
+		$info = $curl->info;
 		if(intval($info['http_code']) > 399)
 		{
 			error_log('RDF::fetch(): Fetching ' . $url . ': HTTP status ' . $info['http_code']);
