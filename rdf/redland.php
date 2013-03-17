@@ -965,6 +965,7 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 		{
 			return null;
 		}
+		$set->matchAlt($this->model);
 		return $set;
 	}
 
@@ -2865,6 +2866,42 @@ class RDFSet extends RedlandModel implements Countable
 	public /*internal*/ function addStream($stream)
 	{
 		librdf_model_add_statements($this->resource, $stream);
+	}
+	
+	public /*internal*/ function matchAlt(RedlandModel $doc)
+	{
+		$list = array();
+		$rs = librdf_model_as_stream($this->resource);
+		$prefix = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#_';
+		while(!librdf_stream_end($rs))
+		{
+			$statement = librdf_stream_get_object($rs);
+			$object = librdf_statement_get_object($statement);			
+			if(librdf_node_is_blank($object))
+			{
+				$query = librdf_new_statement_from_nodes($doc->world->resource, $object, null, null);
+				$stream = librdf_model_find_statements($doc->resource, $query);
+				while(!librdf_stream_end($stream))
+				{
+					$st = librdf_stream_get_object($stream);
+					$pred = librdf_statement_get_predicate($st);
+					$uri = librdf_node_get_uri($pred);
+					$u = librdf_uri_to_string($uri);
+					if(!strncmp($u, $prefix, strlen($prefix)))
+					{
+						$suf = substr($u, strlen($prefix));
+						if(ctype_digit($suf))
+						{
+							$stx = librdf_new_statement_from_statement($st);
+							librdf_statement_set_predicate($stx, librdf_statement_get_predicate($statement));
+							librdf_model_add_statement($this->resource, $stx);
+						}
+					}
+					librdf_stream_next($stream);
+				}
+			}
+			librdf_stream_next($rs);
+		}
 	}
 }
 
