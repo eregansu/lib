@@ -535,7 +535,7 @@ if(function_exists('curl_init'))
 				 * If-Modified-Since header would be.
 				 */
 				$info = stat($cacheFile);
-				$modifiedSince = strftime('%a, %e %b %Y %H:%M:%S UTC');
+				$modifiedSince = strftime('%a, %e %b %Y %H:%M:%S UTC', $info['mtime']);
 				if($time > 0)
 				{
 					if($info['mtime'] + $time > time())
@@ -567,11 +567,11 @@ if(function_exists('curl_init'))
 					else if(is_array($this->headers))
 					{
 						curl_setopt($this->handle, CURLOPT_HTTPHEADER, $this->headers);
-					}					
+					}
 				}
 			}
 			if($fetch)
-			{				
+			{
 				$buf = parent::exec(false);
 				$info = $this->info;
 				if($info['http_code'] == 304 && $modifiedSince !== null)
