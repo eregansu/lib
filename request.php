@@ -64,6 +64,7 @@ abstract class Request implements IObservable
 	public $app; /**< The current application instance, if any */
 	public $hostname; /**< The server hostname associated with the request, if any */
 	public $postData = null;
+	public $queryString = null;
 	public $query = array(); /**< An array of key-value pairs which make up the query parameters */
 	public $crumb = array(); /**< An array of breadcrumb elements which may be presented to the user */
 	public $backRef = null; /**< A reference to the last-but-one entry in the $crumb array */
@@ -707,16 +708,17 @@ class HTTPRequest extends Request
 		/* On at least some lighttpd+fcgi setups, QUERY_STRING ends up
 		 * empty while REQUEST_URI contains ?query...
 		 */
+		$this->queryString = null;
 		if(($pos = strpos($this->uri, '?')) !== false)
 		{
-			$qs = substr($this->uri, $pos + 1);
+			$qs = $this->queryString = substr($this->uri, $pos + 1);
 			$this->uri = substr($this->uri, 0, $pos);
 			$qs = str_replace(';', '&', $qs);
 			parse_str($qs, $this->query);
 		}
 		else if(isset($_SERVER['QUERY_STRING']))
 		{
-			$qs = $_SERVER['QUERY_STRING'];
+			$qs = $this->queryString = $_SERVER['QUERY_STRING'];
 			/* Remove the query from $this->uri if it's there */
 			$l = strlen($qs);
 			$x = substr($this->uri, 0 - ($l + 1));
