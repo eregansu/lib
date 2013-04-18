@@ -107,6 +107,10 @@ abstract class RedlandBase
 		{
 			return new RDFURI(librdf_node_get_uri($node));
 		}
+		if(librdf_node_is_blank($node))
+		{
+			return new RDFURI(librdf_node_to_string($node));
+		}
 		return new RDFComplexLiteral(null, $node, null);
 	}
 }
@@ -1522,6 +1526,10 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 	{
 		assert($this->subject !== null);
 		assert($this->subject->resource !== null);
+		if(librdf_node_is_blank($this->subject->resource))
+		{
+			return '_:' . librdf_node_get_blank_identifier($this->subject->resource);
+		}
 		$uri = librdf_node_get_uri($this->subject->resource);
 		return librdf_uri_to_string($uri);
 	}
@@ -2324,6 +2332,10 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 		{
 			$res = librdf_new_node_from_uri($this->world->resource, $uri);
 		}
+		else if(!strncmp($uri, "_:", 2))
+		{
+			$res = librdf_new_node_from_blank_identifier($this->world->resource, substr($uri, 2));
+		}
 		else
 		{
 			$res = librdf_new_node_from_uri_string($this->world->resource, $uri);
@@ -2391,8 +2403,16 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 		while(!librdf_stream_end($rs))
 		{
 			$statement = librdf_stream_get_object($rs);
-			$subject = librdf_node_get_uri(librdf_statement_get_subject($statement));
-			$k = librdf_uri_to_string($subject);
+			$subj = librdf_statement_get_subject($statement);
+			if(librdf_node_is_blank($subj))
+			{
+				$k = '_:' . librdf_node_get_blank_identifier($subj);
+			}
+			else
+			{
+				$subject = librdf_node_get_uri($subj);
+				$k = librdf_uri_to_string($subject);
+			}
 			$subjects[$k] = $k;
 			librdf_stream_next($rs);
 		}		
@@ -2408,8 +2428,18 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 		while(!librdf_stream_end($rs))
 		{
 			$statement = librdf_stream_get_object($rs);
-			$subject = librdf_node_get_uri(librdf_statement_get_subject($statement));
-			$k = librdf_uri_to_string($subject);
+			$subj = librdf_statement_get_subject($statement);
+			if(librdf_node_is_blank($subj))
+			{
+				$id = librdf_node_get_blank_identifier($subj);
+				$k = '_:' . $id;
+				$subject = $k;
+			}
+			else
+			{
+				$subject = librdf_node_get_uri($subj);
+				$k = librdf_uri_to_string($subject);
+			}
 			$subjects[$k] = $subject;
 			librdf_stream_next($rs);
 		}
