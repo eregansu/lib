@@ -111,7 +111,7 @@ abstract class RedlandBase
 		{
 			return new RDFURI(librdf_node_to_string($node));
 		}
-		return new RDFComplexLiteral(null, $node, null);
+		return RDFComplexLiteral::literal(null, $node, null);
 	}
 }
 
@@ -1612,6 +1612,25 @@ class RDFComplexLiteral extends RedlandNode
 
 	public static function literal($type = null, $value = null, $lang = null, $world = null)
 	{
+		if($value instanceof RedlandNode)
+		{
+			$value = $value->resource;
+		}
+		if(is_resource($value))
+		{
+			if($type === null)
+			{
+				$typeuri = librdf_node_get_literal_value_datatype_uri($value);
+				if(is_resource($typeuri))
+				{
+					$type = librdf_uri_to_string($typeuri);
+				}
+			}
+			if($lang === null)
+			{
+				$lang = librdf_node_get_literal_value_language($value);
+			}
+		}
 		if(!strcmp($type, 'http://www.w3.org/2001/XMLSchema#dateTime'))
 		{
 			return new RDFDatetime($value, $world);
@@ -1643,6 +1662,8 @@ class RDFComplexLiteral extends RedlandNode
 		if(is_resource($value))
 		{
 			$this->resource = $value;
+			$this->type = $this->type();
+			$this->lang = $this->lang();
 		}
 		else if($this->type !== null)
 		{
