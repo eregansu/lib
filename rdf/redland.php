@@ -109,6 +109,11 @@ abstract class RedlandBase
 		}
 		if(librdf_node_is_blank($node))
 		{
+			$str = librdf_node_to_string($node);
+			if(substr($str, 0, 1) == '(' && substr($str, -1) == ')')
+			{
+				$str = '_:' . substr($str, 1, -1);
+			}			
 			return new RDFURI(librdf_node_to_string($node));
 		}
 		return RDFComplexLiteral::literal(null, $node, null);
