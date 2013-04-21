@@ -114,7 +114,7 @@ abstract class RedlandBase
 			{
 				$str = '_:' . substr($str, 1, -1);
 			}			
-			return new RDFURI(librdf_node_to_string($node));
+			return new RDFURI($str);
 		}
 		return RDFComplexLiteral::literal(null, $node, null);
 	}
