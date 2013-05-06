@@ -753,7 +753,7 @@ class DBDataSet implements IDataSet
 		if(!$this->row())
 		{
 			$this->EOF = true;
-			return null;
+			return false;
 		}
 		$this->count++;
 		return $this->fields;
