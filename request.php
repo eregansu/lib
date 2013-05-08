@@ -383,7 +383,7 @@ abstract class Request implements IObservable
 		}
 		if(!isset($info['link']))
 		{
-			$info['link'] = $this->pageUri;
+			$info['link'] = $this->resource;
 		}
 		if($key === null)
 		{
