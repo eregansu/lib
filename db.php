@@ -103,7 +103,7 @@ interface IDirectoryService extends IDatabase
 	public function insertAt($dn, $object);
 }
 
-interface IDataSet extends Iterator
+interface IDataSet extends Iterator, Countable
 {
 }
 
@@ -789,5 +789,10 @@ class DBDataSet implements IDataSet
 			$this->next();
 		}
 		return !$this->EOF;
+	}
+	
+	public function count()
+	{
+		return $this->count;
 	}
 }
