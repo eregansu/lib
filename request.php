@@ -597,9 +597,9 @@ abstract class Request implements IObservable
 				}
 				if($lang === null)
 				{
-					die('failed to find ' . $suf . ' in language list');
 					return 406;
 				}
+				$this->explicitLang = $lang;
 				$this->langs = array($lang => array('lang' => $lang, 'q' => 1));
 			}
 			$match = array();
