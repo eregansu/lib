@@ -437,6 +437,51 @@ abstract class Request implements IObservable
 	 * or an HTTP status code (method not allowed, not acceptable, etc.) upon
 	 * failure.
 	 */
+	
+	protected function processAcceptList(&$list, $key, &$default)
+	{
+		if($list === null)
+		{
+			return null;
+		}
+		if(!is_array($list))
+		{
+			$list = array($list);
+		}
+		$def = null;
+		$map = array();
+		foreach($list as $k => $value)
+		{
+			if(!strcmp($k, 'default'))
+			{
+				unset($list[$k]);
+				$def = $value;
+				continue;
+			}
+			if(is_array($value))
+			{
+				if(!isset($value['q']))
+				{
+					$value['q'] = 1;
+				}
+				if(!isset($value[$key]))
+				{
+					$value[$key] = $k;
+				}
+			}
+			else
+			{
+				$value = array('q' => 1, $key => $value);
+			}
+			$list[$k] = $value;
+			$map[$value[$key]] = $value;
+		}
+		if($def !== null && isset($map[$def]))
+		{
+			$default = $map[$def];
+		}
+	}
+	
 	public function negotiate($methods = null, $contentTypes = null, $languages = null)
 	{
 		$headers = array();
@@ -448,52 +493,10 @@ abstract class Request implements IObservable
 				return 405; /* Method Not Allowed */
 			}
 		}
-		/* Transform $contentTypes into a form we can use */
-		if($contentTypes !== null)
-		{
-			foreach($contentTypes as $k => $value)
-			{
-				if(is_array($value))
-				{
-					if(!isset($value['q']))
-					{
-						$value['q'] = 1;
-					}
-					if(!isset($value['type']))
-					{
-						$value['type'] = $k;
-					}
-				}
-				else
-				{
-					$value = array('q' => 1, 'type' => $value);
-				}
-				$contentTypes[$k] = $value;
-			}
-		}
-		/* Transform $languages into a form we can use */
-		if($languages !== null)
-		{
-			foreach($languages as $k => $value)
-			{
-				if(is_array($value))
-				{
-					if(!isset($value['q']))
-					{
-						$value['q'] = 1;
-					}
-					if(!isset($value['type']))
-					{
-						$value['type'] = $k;
-					}
-				}
-				else
-				{
-					$value = array('q' => 1, 'lang' => $value);
-				}
-				$languages[$k] = $value;
-			}
-		}
+		$defaultType = null;
+		$defaultLanguage = null;
+		$this->processAcceptList($contentTypes, 'type', $defaultType);
+		$this->processAcceptList($languages, 'lang', $defaultLanguage);
 		$alternates = array();
 		$uri = $this->resource;
 		/* Perform content negotiation */
@@ -554,9 +557,19 @@ abstract class Request implements IObservable
 				{
 					continue;
 				}
-				if($languages !== null)
+				if(isset($value['lang']))
 				{
-					foreach($languages as $lang)
+					$dummy = null;
+					$langList = $value['lang'];
+					$this->processAcceptList($langList, 'lang', $dummy);
+				}
+				else
+				{
+					$langList = $languages;
+				}
+				if($langList !== null)
+				{
+					foreach($langList as $lang)
 					{
 						$lext = '.' . (isset($lang['ext']) ? $lang['ext'] : $lang['lang']);
 						$alternates[] = '{"' . addslashes($uri . $lext . $ext) . '" ' . floatval($value['q']) . ' {type ' . $value['type'] . '}{language ' . $lang['lang'] . '}}';
@@ -567,22 +580,42 @@ abstract class Request implements IObservable
 					$alternates[] = '{"' . addslashes($uri . $ext) . '" ' . floatval($value['q']) . ' {type ' . $value['type'] . '}}';
 				}
 			}
+			if(count($alternates))
+			{
+				$headers['Alternates'] = implode(', ', $alternates);
+			}
 			krsort($match);
 			$type = array_shift($match);
 			if($type === null)
 			{
-				return 406;
+				if($defaultType !== null)
+				{
+					$type = $defaultType;
+				}
+				else
+				{
+					$headers['Status'] = 406;
+					return $headers;
+				}
 			}
 			$this->negotiatedType = $type;
+			if(isset($type['lang']))
+			{
+				$languages = $type['lang'];
+				$this->processAcceptList($languages, 'lang', $defaultLanguage);				
+			}
 			$headers['Content-Type'] = $type['type'];
+			$headers['Vary'] = 'Accept';
 			if(isset($type['location']))
 			{
 				$headers['Content-Location'] = $type['location'];
 			}
 		}
+		/* Transform $languages into a form we can use */
 		/* Perform content-language negotiation */
 		if($languages !== null)
 		{
+			$headers['Vary'] = isset($contentTypes) ? 'Accept,Accept-Language' : 'Accept-Language';
 			if(isset($this->suffixes[0]))
 			{
 				$suf = array_shift($this->suffixes);
@@ -635,7 +668,7 @@ abstract class Request implements IObservable
 				}
 				if($contentTypes !== null)
 				{
-					/* Allow type negotiation to populate the Alternates header */
+					/* Allow type negotiation above to populate the Alternates header */
 					continue;
 				}
 				if(isset($value['ext']))
@@ -652,7 +685,15 @@ abstract class Request implements IObservable
 			$lang = array_shift($match);
 			if($lang === null)
 			{
-				return 406;
+				if(isset($defaultLanguage))
+				{
+					$lang = $defaultLanguage;
+				}
+				else
+				{
+					$headers['Status'] = 406;
+					return $headers;
+				}
 			}
 			$this->negotiatedLang = $lang;
 			$headers['Content-Language'] = $lang['lang'];
@@ -660,18 +701,6 @@ abstract class Request implements IObservable
 			{
 				$headers['Content-Location'] = $lang['location'];
 			}			
-		}
-		if($contentTypes !== null && $languages !== null)
-		{
-			$headers['Vary'] = 'Accept,Accept-Language';
-		}
-		else if($contentTypes !== null)
-		{
-			$headers['Vary'] = 'Accept';
-		}
-		else if($languages !== null)
-		{
-			$headers['Vary'] = 'Accept-Language';
 		}
 		if(count($alternates))
 		{
