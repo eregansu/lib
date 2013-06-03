@@ -327,6 +327,24 @@ abstract class DBTable
 		}
 	}
 	
+	/* Convenience function: create the primary key from a single field */
+	public function primaryKey($name)
+	{
+		return $this->indexWithSpec(null, DBIndex::PRIMARY, $name);
+	}
+
+	/* Convenience function: create an index from a single field */
+	public function index($name)
+	{
+		return $this->indexWithSpec($name, DBIndex::INDEX, $name);
+	}
+
+	/* Convenience function: create an unique key from a single field */
+	public function uniqueKey($name)
+	{
+		return $this->indexWithSpec($name, DBIndex::UNIQUE, $name);
+	}
+	
 	/* Drop a column from a table */
 	public function dropColumn($name)
 	{
