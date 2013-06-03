@@ -52,7 +52,7 @@ class CLIRequest extends Request
 		}
 	}
 	
-	protected function determineTypes($acceptHeader = null)
+	protected function determineTypes($acceptHeader = null, $acceptLangs = null)
 	{
 		$this->types = array('text/plain' => array('type' => 'text/plain', 'q' => 1));
 	}

@@ -494,6 +494,11 @@ abstract class DBTable
 		return true;
 	}
 	
+	public function setNativeCreateOption($key, $value)
+	{
+		$this->nativeCreateOptions[$key] = $value;
+	}
+	
 	protected function nativeCreateOptions()
 	{
 		$list = array();

@@ -107,7 +107,16 @@ abstract class RedlandBase
 		{
 			return new RDFURI(librdf_node_get_uri($node));
 		}
-		return new RDFComplexLiteral(null, $node, null);
+		if(librdf_node_is_blank($node))
+		{
+			$str = librdf_node_to_string($node);
+			if(substr($str, 0, 1) == '(' && substr($str, -1) == ')')
+			{
+				$str = '_:' . substr($str, 1, -1);
+			}			
+			return new RDFURI($str);
+		}
+		return RDFComplexLiteral::literal(null, $node, null);
 	}
 }
 
@@ -729,6 +738,14 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 			while(!librdf_stream_end($rs))
 			{
 				$statement = librdf_stream_get_object($rs);
+				if(isset($object->sourceModel))
+				{
+					$stobj = librdf_statement_get_object($statement);
+					if(librdf_node_is_blank($stobj))
+					{
+						$this->mergeSubject($stobj, $object->sourceModel->resource);
+					}
+				}
 				$new = librdf_new_statement_from_statement($statement);
 				librdf_statement_set_subject($new, $this->subject->resource);
 				librdf_statement_set_predicate($new, $predicate->resource);
@@ -784,6 +801,25 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 			$this->world->resource,
 			$this->subject->resource, $predicate->resource, $object->resource);
 		$this->model->addStatement($statement);
+	}
+
+	protected function mergeSubject($subject, $model)
+	{
+		$query = librdf_new_statement_from_nodes($this->world->resource, $subject, null, null);
+		$statements = librdf_model_find_statements($model, $query);
+		librdf_model_add_statements($this->model->resource, $statements);
+		/* Add any associated bnodes */
+		$rs = librdf_model_find_statements($model, $query);
+		while(!librdf_stream_end($rs))
+		{
+			$statement = librdf_stream_get_object($rs);
+			$obj = librdf_statement_get_object($statement);
+			if(librdf_node_is_blank($obj))
+			{
+				$this->mergeSubject($obj, $model);
+			}
+			librdf_stream_next($rs);
+		}
 	}
 
 	public function remove($predicate)
@@ -947,7 +983,7 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 	public function all($key, $nullOnEmpty = false)
 	{
 		if(!is_array($key)) $key = array($key);
-		$set = new RDFSet();
+		$set = new RDFSet(null, null, $this->model);
 		foreach($key as $k)
 		{
 			$k = $this->translateQName($k);
@@ -1522,6 +1558,10 @@ abstract class RDFInstanceBase extends RedlandBase implements ArrayAccess
 	{
 		assert($this->subject !== null);
 		assert($this->subject->resource !== null);
+		if(librdf_node_is_blank($this->subject->resource))
+		{
+			return '_:' . librdf_node_get_blank_identifier($this->subject->resource);
+		}
 		$uri = librdf_node_get_uri($this->subject->resource);
 		return librdf_uri_to_string($uri);
 	}
@@ -1577,6 +1617,25 @@ class RDFComplexLiteral extends RedlandNode
 
 	public static function literal($type = null, $value = null, $lang = null, $world = null)
 	{
+		if($value instanceof RedlandNode)
+		{
+			$value = $value->resource;
+		}
+		if(is_resource($value))
+		{
+			if($type === null)
+			{
+				$typeuri = librdf_node_get_literal_value_datatype_uri($value);
+				if(is_resource($typeuri))
+				{
+					$type = librdf_uri_to_string($typeuri);
+				}
+			}
+			if($lang === null)
+			{
+				$lang = librdf_node_get_literal_value_language($value);
+			}
+		}
 		if(!strcmp($type, 'http://www.w3.org/2001/XMLSchema#dateTime'))
 		{
 			return new RDFDatetime($value, $world);
@@ -1608,6 +1667,8 @@ class RDFComplexLiteral extends RedlandNode
 		if(is_resource($value))
 		{
 			$this->resource = $value;
+			$this->type = $this->type();
+			$this->lang = $this->lang();
 		}
 		else if($this->type !== null)
 		{
@@ -1912,9 +1973,7 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 			$this->merge($sub);
 		}
 		$subject = $inst->subject->resource;
-		$query = librdf_new_statement_from_nodes($this->world->resource, $subject, null, null);
-		$statements = librdf_model_find_statements($inst->model->resource, $query);
-		librdf_model_add_statements($this->resource, $statements);
+		$this->mergeSubject($subject, $inst->model->resource);		
 		$inst->model = $this;
 		librdf_model_sync($this->resource);
 		if(!isset($inst->knownPredicates))
@@ -1926,6 +1985,25 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 			$inst->contextUri = $this->contextUri;
 		}
 		return $inst;
+	}
+		
+	protected function mergeSubject($subject, $model)
+	{
+		$query = librdf_new_statement_from_nodes($this->world->resource, $subject, null, null);
+		$statements = librdf_model_find_statements($model, $query);
+		librdf_model_add_statements($this->resource, $statements);
+		/* Add any associated bnodes */
+		$rs = librdf_model_find_statements($model, $query);
+		while(!librdf_stream_end($rs))
+		{
+			$statement = librdf_stream_get_object($rs);
+			$obj = librdf_statement_get_object($statement);
+			if(librdf_node_is_blank($obj))
+			{
+				$this->mergeSubject($obj, $model);
+			}
+			librdf_stream_next($rs);
+		}
 	}
 
 	/* ArrayAccess::offsetGet() */
@@ -2324,6 +2402,10 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 		{
 			$res = librdf_new_node_from_uri($this->world->resource, $uri);
 		}
+		else if(!strncmp($uri, "_:", 2))
+		{
+			$res = librdf_new_node_from_blank_identifier($this->world->resource, substr($uri, 2));
+		}
 		else
 		{
 			$res = librdf_new_node_from_uri_string($this->world->resource, $uri);
@@ -2391,8 +2473,16 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 		while(!librdf_stream_end($rs))
 		{
 			$statement = librdf_stream_get_object($rs);
-			$subject = librdf_node_get_uri(librdf_statement_get_subject($statement));
-			$k = librdf_uri_to_string($subject);
+			$subj = librdf_statement_get_subject($statement);
+			if(librdf_node_is_blank($subj))
+			{
+				$k = '_:' . librdf_node_get_blank_identifier($subj);
+			}
+			else
+			{
+				$subject = librdf_node_get_uri($subj);
+				$k = librdf_uri_to_string($subject);
+			}
 			$subjects[$k] = $k;
 			librdf_stream_next($rs);
 		}		
@@ -2408,8 +2498,18 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 		while(!librdf_stream_end($rs))
 		{
 			$statement = librdf_stream_get_object($rs);
-			$subject = librdf_node_get_uri(librdf_statement_get_subject($statement));
-			$k = librdf_uri_to_string($subject);
+			$subj = librdf_statement_get_subject($statement);
+			if(librdf_node_is_blank($subj))
+			{
+				$id = librdf_node_get_blank_identifier($subj);
+				$k = '_:' . $id;
+				$subject = $k;
+			}
+			else
+			{
+				$subject = librdf_node_get_uri($subj);
+				$k = librdf_uri_to_string($subject);
+			}
 			$subjects[$k] = $subject;
 			librdf_stream_next($rs);
 		}
@@ -2447,7 +2547,8 @@ class RDFDocument extends RedlandModel implements ArrayAccess, ISerialisable
 class RDFSet extends RedlandModel implements Countable
 {
 	protected $blank;
-
+	public $sourceModel;
+	
 	public static function setFromInstances($keys, $instances /* ... */)
 	{
 		$set = new RDFSet();
@@ -2479,9 +2580,10 @@ class RDFSet extends RedlandModel implements Countable
 		return $set;
 	}
 
-	public function __construct($values = null, $world = null)
+	public function __construct($values = null, $world = null, $sourceModel = null)
 	{
 		parent::__construct(null, null, $world);
+		$this->sourceModel = $sourceModel;
 		$this->blank = librdf_new_node($this->world->resource);
 		$this->blankPredicate = librdf_new_node_from_uri_string($this->world->resource, 'http://example.com/blankPredicate');
 		if($values === null) return;

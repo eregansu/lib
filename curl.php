@@ -580,6 +580,7 @@ if(function_exists('curl_init'))
 					$buf = file_get_contents($cacheFile);
 					$info = json_decode(file_get_contents($cacheFile . '.json'), true);
 					$info['cacheFile'] = $cacheFile;
+					$info['hash'] = $hash;
 				}
 				else if($store && ($buf !== false || $this->cacheErrors))
 				{
@@ -591,6 +592,8 @@ if(function_exists('curl_init'))
 					fwrite($f, json_encode($info));
 					fclose($f);
 					$info['fetched'] = true;
+					$info['hash'] = $hash;
+					$info['cacheFile'] = $cacheFile;
 				}
 			}
 			else if(strlen($cacheFile))
@@ -601,6 +604,7 @@ if(function_exists('curl_init'))
 				$buf = file_get_contents($cacheFile);
 				$info = json_decode(file_get_contents($cacheFile . '.json'), true);
 				$info['cacheFile'] = $cacheFile;
+				$info['hash'] = $hash;
 			}
 			else
 			{

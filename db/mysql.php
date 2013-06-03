@@ -258,7 +258,12 @@ class MySQLSet extends DBDataSet
 	protected function row()
 	{
 		$this->fetched = true;
-		return ($this->fields = mysql_fetch_assoc($this->resource));
+		$this->fields = mysql_fetch_assoc($this->resource);
+		if(!is_array($this->fields))
+		{
+			return false;
+		}
+		return true;
 	}
 	
 	public function rewind()

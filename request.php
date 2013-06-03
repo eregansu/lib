@@ -58,9 +58,8 @@ abstract class Request implements IObservable
 	public $page; /**< The array of path elements which make up the current page relative to the application root */
 	public $base; /**< The URI of the current application base, with trailing slash */
 	public $pageUri; /**< The URI of the current page, with trailing slash */
-	public $resource; /**< The URI of the current page, without trailing slash; if $pageUri is '/', $resourceUri is '/index' */
-	public $types; /**< Accepted MIME types, in order of preference */
 	public $contentType; /**< MIME type of the body of the request, if any */
+	public $resource; /**< The URI of the current page, without trailing slash; if $pageUri is '/', $resourceUri is '/index' */
 	public $app; /**< The current application instance, if any */
 	public $hostname; /**< The server hostname associated with the request, if any */
 	public $postData = null;
@@ -70,14 +69,23 @@ abstract class Request implements IObservable
 	public $backRef = null; /**< A reference to the last-but-one entry in the $crumb array */
 	public $lastRef = null; /**< A reference to the last entry in the $crumb array */
 	public $stderr;
-	public $explicitSuffix = null; /**< The suffix supplied in the URI, if any (e.g., '.html') */
 	public $sessionInitialised; /**< A <a href="http://www.php.net/callback">callback</a> which if specified is invoked when the \P{$session} associated with the request is initialised. */
 	public $certificate;
 	public $certificateInfo;
 	public $publicKey;
 	public $publicKeyHash;
 	public $headers = array(); /**< Headers supplied as part of the request */
+	public $suffixes = array();
+	public $origParams = array();
+	public $origSuffixes = array();
+
+	public $types; /**< Accepted MIME types, in order of preference */
+	public $explicitSuffix = null; /**< The suffix supplied in the URI, if any (e.g., '.html') */
 	public $negotiatedType = null;
+	
+	public $langs = null;
+	public $explicitLang = null;
+	public $negotiatedLang = null;
 	
 	/* Information identifying the peer performing the request */
 	public $peerIdentification = array();
@@ -172,59 +180,10 @@ abstract class Request implements IObservable
 		$this->session = new TransientSession($this);
 	}
 	
-	/**
-	 * @internal
-	 */
-	protected function determineTypes($acceptHeader = null)
+	protected function parseAcceptHeader($header, $key = 'type')
 	{
-		$ext = null;
-		foreach($this->params as $k => $p)
-		{
-			$x = explode('.', $p);
-			if(count($x) > 1)
-			{
-				require_once(dirname(__FILE__) . '/mime.php');
-				$ext = $x[count($x) - 1];
-				$t = MIME::typeForExt($ext);
-				if(strlen($t))
-				{
-					$this->params[$k] = $x[0];
-				}
-				else
-				{
-					$ext = null;
-				}
-			}
-		}
-		foreach($this->objects as $k => $p)
-		{
-			$x = explode('.', $p);
-			if(count($x) > 1)
-			{
-				require_once(dirname(__FILE__) . '/mime.php');
-				$ext = $x[count($x) - 1];
-				$t = MIME::typeForExt($ext);
-				if(strlen($t))
-				{					
-					$this->objects[$k] = $x[0];
-				}
-				else
-				{
-					$ext = null;
-				}
-			}
-		}
-		if($ext !== null)
-		{
-			$this->explicitSuffix = '.' . $ext;
-			$t = MIME::typeForExt($ext);
-			$this->types = array(
-				$t => array('type' => $t, 'q' => 1),
-				);
-			return;
-		}
-		$accept = explode(',', $acceptHeader);
-		$this->types = array();
+		$accept = explode(',', $header);
+		$list = array();
 		foreach($accept as $h)
 		{
 			$h = explode(';', $h);
@@ -242,8 +201,35 @@ abstract class Request implements IObservable
 			{
 				$t = '*';
 			}
-			$this->types[$t] = array('type' => $t, 'q' => $q);
+			$list[$t] = array($key => $t, 'q' => $q);
 		}
+		return $list;
+	}
+	
+	/**
+	 * @internal
+	 */
+	protected function determineTypes($acceptHeader = null, $acceptLangsHeader = null)
+	{
+		require_once(dirname(__FILE__) . '/mime.php');
+		$suffixes = array();
+		foreach($this->params as $k => $p)
+		{
+			$x = explode('.', $p);
+			$this->params[$k] = array_shift($x);
+			$suffixes = array();
+			foreach($x as $s)
+			{
+				if(strlen($s))
+				{
+					$suffixes[] = $s;
+				}
+			}
+		}
+		$this->origSuffixes = $suffixes;
+		$this->suffixes = $suffixes;
+		$this->types = $this->parseAcceptHeader($acceptHeader, 'type');
+		$this->langs = $this->parseAcceptHeader($acceptLangsHeader, 'lang');
 	}
 	
 	/**
@@ -324,11 +310,6 @@ abstract class Request implements IObservable
 		}
 	}
 	
-	public function consumeObject()
-	{
-		return array_shift($this->objects);
-	}
-	
 	/**
 	 * @internal
 	 */
@@ -383,7 +364,7 @@ abstract class Request implements IObservable
 		}
 		if(!isset($info['link']))
 		{
-			$info['link'] = $this->pageUri;
+			$info['link'] = $this->resource;
 		}
 		if($key === null)
 		{
@@ -456,7 +437,52 @@ abstract class Request implements IObservable
 	 * or an HTTP status code (method not allowed, not acceptable, etc.) upon
 	 * failure.
 	 */
-	public function negotiate($methods = null, $contentTypes = null)
+	
+	protected function processAcceptList(&$list, $key, &$default)
+	{
+		if($list === null)
+		{
+			return null;
+		}
+		if(!is_array($list))
+		{
+			$list = array($list);
+		}
+		$def = null;
+		$map = array();
+		foreach($list as $k => $value)
+		{
+			if(!strcmp($k, 'default'))
+			{
+				unset($list[$k]);
+				$def = $value;
+				continue;
+			}
+			if(is_array($value))
+			{
+				if(!isset($value['q']))
+				{
+					$value['q'] = 1;
+				}
+				if(!isset($value[$key]))
+				{
+					$value[$key] = $k;
+				}
+			}
+			else
+			{
+				$value = array('q' => 1, $key => $value);
+			}
+			$list[$k] = $value;
+			$map[$value[$key]] = $value;
+		}
+		if($def !== null && isset($map[$def]))
+		{
+			$default = $map[$def];
+		}
+	}
+	
+	public function negotiate($methods = null, $contentTypes = null, $languages = null)
 	{
 		$headers = array();
 
@@ -467,55 +493,29 @@ abstract class Request implements IObservable
 				return 405; /* Method Not Allowed */
 			}
 		}
-		/* Transform $contentTypes into a form we can use */
+		$defaultType = null;
+		$defaultLanguage = null;
+		$this->processAcceptList($contentTypes, 'type', $defaultType);
+		$this->processAcceptList($languages, 'lang', $defaultLanguage);
+		$alternates = array();
+		$uri = $this->resource;
+		/* Perform content negotiation */
 		if($contentTypes !== null)
 		{
+			$l = count($this->suffixes);
+			if($l && ($t = MIME::typeForExt($this->suffixes[$l - 1])) !== null)
+			{
+				$ext = array_pop($this->suffixes);
+				$this->explicitSuffix = '.' . $ext;
+				$t = MIME::typeForExt($ext);
+				$this->types = array(
+					$t => array('type' => $t, 'q' => 1),
+					);
+			}
 			$match = array();
-			$alternates = array();
-			$uri = $this->resource;
 			foreach($contentTypes as $k => $value)
 			{
-				if(is_array($value))
-				{
-					if(!isset($value['q']))
-					{
-						$value['q'] = 1;
-					}
-					if(!isset($value['type']))
-					{
-						$value['type'] = $k;
-					}
-				}
-				else
-				{
-					$value = array('q' => 1, 'type' => $value);
-				}
-				if(empty($value['hide']))
-				{
-					$l = null;
-					if(isset($value['location']))
-					{
-						$l = $value['location'];
-					}
-					else if(isset($value['ext']))
-					{
-						$l = $uri . '.' . $value['ext'];
-						$value['location'] = $l;
-					}
-					else
-					{
-						$e = MIME::extForType($value['type']);
-						if(strlen($e))
-						{
-							$l = $uri . $e;
-							$value['location'] = $l;
-						}
-					}
-					if($l !== null)
-					{
-						$alternates[] = '{"' . addslashes($l) . '" ' . floatval($value['q']) . ' {type ' . $value['type'] . '}}';
-					}
-				}
+				/* Calculate from the accept headers */
 				if(isset($this->types[$value['type']]))
 				{
 					$value['cq'] = $this->types[$value['type']]['q'];
@@ -526,28 +526,185 @@ abstract class Request implements IObservable
 				}
 				else
 				{
+					$value['cq'] = 0;
+				}
+				/* Add the type to the match list with a sortable key */
+				if($value['q'] * $value['cq'])
+				{
+					$key = sprintf('%1.05f-%s', $value['q'] * $value['cq'], $value['type']);					
+					$match[$key] = $value;
+				}
+				/* Finally, if the type isn't hidden, add it to the list of alternates */
+				if(!empty($value['hide']))
+				{
 					continue;
 				}
-				$key = sprintf('%1.05f-%s', $value['q'] * $value['cq'], $value['type']);
-				$match[$key] = $value;		   
+				if(isset($value['location']))
+				{
+					/* If there's a specific location, just add it to the alternates list as-is */
+					$alternates[] = '{"' . addslashes($value['location']) . '" ' . floatval($value['q']) . ' {type ' . $value['type'] . '}}';
+					continue;
+				}
+				if(isset($value['ext']))
+				{
+					$ext = '.' . $value['ext'];
+				}
+				else
+				{
+					$ext = MIME::extForType($value['type']);				
+				}
+				if(!strlen($ext))
+				{
+					continue;
+				}
+				if(isset($value['lang']))
+				{
+					$dummy = null;
+					$langList = $value['lang'];
+					$this->processAcceptList($langList, 'lang', $dummy);
+				}
+				else
+				{
+					$langList = $languages;
+				}
+				if($langList !== null)
+				{
+					foreach($langList as $lang)
+					{
+						$lext = '.' . (isset($lang['ext']) ? $lang['ext'] : $lang['lang']);
+						$alternates[] = '{"' . addslashes($uri . $lext . $ext) . '" ' . floatval($value['q']) . ' {type ' . $value['type'] . '}{language ' . $lang['lang'] . '}}';
+					}
+				}
+				else
+				{
+					$alternates[] = '{"' . addslashes($uri . $ext) . '" ' . floatval($value['q']) . ' {type ' . $value['type'] . '}}';
+				}
+			}
+			if(count($alternates))
+			{
+				$headers['Alternates'] = implode(', ', $alternates);
 			}
 			krsort($match);
 			$type = array_shift($match);
 			if($type === null)
 			{
-				return 406;
+				if($defaultType !== null)
+				{
+					$type = $defaultType;
+				}
+				else
+				{
+					$headers['Status'] = 406;
+					return $headers;
+				}
 			}
 			$this->negotiatedType = $type;
+			if(isset($type['lang']))
+			{
+				$languages = $type['lang'];
+				$this->processAcceptList($languages, 'lang', $defaultLanguage);				
+			}
 			$headers['Content-Type'] = $type['type'];
+			$headers['Vary'] = 'Accept';
 			if(isset($type['location']))
 			{
 				$headers['Content-Location'] = $type['location'];
 			}
-			$headers['Vary'] = 'Accept';
-			if(count($alternates))
+		}
+		/* Transform $languages into a form we can use */
+		/* Perform content-language negotiation */
+		if($languages !== null)
+		{
+			$headers['Vary'] = isset($contentTypes) ? 'Accept,Accept-Language' : 'Accept-Language';
+			if(isset($this->suffixes[0]))
 			{
-				$headers['Alternates'] = implode(', ', $alternates);
+				$suf = array_shift($this->suffixes);
+				$lang = null;
+				foreach($languages as $value)
+				{
+					if(!strcmp($suf, $value['lang']))
+					{
+						$lang = $value['lang'];
+						break;
+					}
+				}
+				if($lang === null)
+				{
+					return 406;
+				}
+				$this->explicitLang = $lang;
+				$this->langs = array($lang => array('lang' => $lang, 'q' => 1));
 			}
+			$match = array();
+			foreach($languages as $value)
+			{
+				if(isset($this->langs[$value['lang']]))
+				{
+					$value['cq'] = $this->langs[$value['lang']]['q'];
+				}
+				else if(isset($this->langs['*']))
+				{
+					$value['cq'] = $this->langs['*']['q'];
+				}
+				else
+				{
+					$value['cq'] = 0;
+				}
+				/* Add the type to the match list with a sortable key */
+				if($value['q'] * $value['cq'])
+				{
+					$key = sprintf('%1.05f-%s', $value['q'] * $value['cq'], $value['lang']);					
+					$match[$key] = $value;
+				}
+				if(!empty($value['hide']))
+				{
+					continue;
+				}
+				if(isset($value['location']))
+				{
+					/* If there's a specific location, just add it to the alternates list as-is */
+					$alternates[] = '{"' . addslashes($value['location']) . '" ' . floatval($value['q']) . ' {language ' . $value['lang'] . '}}';
+					continue;
+				}
+				if($contentTypes !== null)
+				{
+					/* Allow type negotiation above to populate the Alternates header */
+					continue;
+				}
+				if(isset($value['ext']))
+				{
+					$ext = '.' . $value['ext'];
+				}
+				else
+				{
+					$ext = '.' . $value['lang'];				
+				}
+				$alternates[] = '{"' . addslashes($uri . $ext) . '" ' . floatval($value['q']) . ' {language ' . $value['lang'] . '}}';
+			}
+			krsort($match);
+			$lang = array_shift($match);
+			if($lang === null)
+			{
+				if(isset($defaultLanguage))
+				{
+					$lang = $defaultLanguage;
+				}
+				else
+				{
+					$headers['Status'] = 406;
+					return $headers;
+				}
+			}
+			$this->negotiatedLang = $lang;
+			$headers['Content-Language'] = $lang['lang'];
+			if(isset($lang['location']))
+			{
+				$headers['Content-Location'] = $lang['location'];
+			}			
+		}
+		if(count($alternates))
+		{
+			$headers['Alternates'] = implode(', ', $alternates);
 		}
 		return $headers;
 	}
@@ -759,7 +916,6 @@ class HTTPRequest extends Request
 		$this->base = $this->root;
 		$this->params = array();
 		$this->page = array();
-		$this->objects = array();
 		$this->pageUri = $this->root;
 		if($this->pageUri == '/')
 		{
@@ -770,18 +926,10 @@ class HTTPRequest extends Request
 			$this->resource = substr($this->pageUri, 0, -1);
 		}
 		if(!strncmp($this->root, $this->uri, strlen($this->root)))
-		{
+		{			
 			$rel = substr($this->uri, strlen($this->root) - 1);
-			$pl = $this->arrayFromURI($rel);
-			while(($p = array_shift($pl)) !== null)
-			{
-				if($p == '-') break;
-				$this->params[] = $p;
-			}
-			while(($p = array_shift($pl)) !== null)
-			{
-				$this->objects[] = $p;
-			}
+			$this->origParams = $this->arrayFromURI($rel);
+			$this->params = $this->origParams;
 		}
 		if(isset($_SERVER['HTTP_HOST']) && strlen($_SERVER['HTTP_HOST']))
 		{
@@ -877,7 +1025,7 @@ class HTTPRequest extends Request
 	    return $value;
 	}
 	
-	protected function determineTypes($acceptHeader = null)
+	protected function determineTypes($acceptHeader = null, $acceptLangsHeader = null)
 	{
 		if($acceptHeader === null)
 		{
@@ -890,7 +1038,18 @@ class HTTPRequest extends Request
 				$acceptHeader = '*/*';
 			}
 		}
-		parent::determineTypes($acceptHeader);
+		if($acceptLangsHeader === null)
+		{
+			if(isset($_SERVER['HTTP_ACCEPT_LANGUAGE']))
+			{
+				$acceptLangsHeader = $_SERVER['HTTP_ACCEPT_LANGUAGE'];
+			}
+			if(!strlen($acceptLangsHeader))
+			{
+				$acceptLangsHeader = '*';
+			}
+		}
+		parent::determineTypes($acceptHeader, $acceptLangsHeader);
 	}
 
 
