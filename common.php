@@ -1,6 +1,6 @@
 <?php
 
-/* Copyright 2009-2012 Mo McRoberts.
+/* Copyright 2009-2013 Mo McRoberts.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -15,50 +15,35 @@
  *  limitations under the License.
  */
 
-/**
- * @year 2009-2011
- * @include require_once(dirname(__FILE__) . '/../eregansu/lib/common.php');
- * @since Available in Eregansu 1.0 and later. 
- */
-
-/**
- * @module lib/common.php
- * @brief Entry-point of the Eregansu Core Library.
- *
- * The Eregansu Core Library provides support facilities and base classes used by
- * the Eregansu Platform. When included, this file performs a number of initialisation
- * tasks:
- * 
- * - Sets a default umask
- * - Enables error reporting
- * - Disables magic quotes, to the extent possible
- * - Sets the default character set to UTF-8
- * - Sets the default timezone to UTC
- * - Disables session auto-start
- * - Installs an error handler which throws exceptions
- * - Installs a class auto-load handler
- * - Defines the e(), _e(), is_arrayish() and uses() functions
- *
- * Applications built upon the Eregansu Platform need not include lib/common.php directly.
- * However, an application just wishing to make use of the facilities provided by the
- * Core Library may include lib/common.php as part of its initialisation.
- */
-
-/**
- * Indicates that the Eregansu framework is loaded.
- *
- * In a future version, __EREGANSU__ will be defined to a release tag
- * or commit hash, substituted by an installation script. The
- * percent-percent-version-percent-percent comment is a placeholder
- * to indicate which line should be replaced.
- */
-define('__EREGANSU__', 'master'); /* %%version%% */
+define('__EREGANSU__', 'develop'); /* %%version%% */
 
 if(!defined('PHP_VERSION_ID'))
 {
     $php_version = explode('.', PHP_VERSION);
     define('PHP_VERSION_ID', ($php_version[0] * 10000 + $php_version[1] * 100 + $php_version[2]));
 }
+
+if(defined('WP_CONTENT_URL') && defined('ABSPATH'))
+{
+	/* If we're being included inside WordPress, just perform
+	 * minimal amounts of setup.
+	 */
+	define('EREGANSU_MINIMAL_CORE', true);
+	define('INSTANCE_ROOT', ABSPATH);
+	define('PUBLIC_ROOT', ABSPATH);
+	define('CONFIG_ROOT', INSTANCE_ROOT . 'config/');
+	define('PLATFORM_ROOT', INSTANCE_ROOT . 'eregansu/');
+	define('PLATFORM_LIB', PLATFORM_ROOT . 'lib/');
+	define('MODULES_ROOT', INSTANCE_ROOT . 'app/');
+	
+	global $MODULE_ROOT;
+	
+	if(!isset($MODULE_ROOT))
+	{
+		$MODULE_ROOT = MODULES_ROOT;	
+	}
+}
+
 
 /**
  * The ISerialisable interface is implemented by classes which can serialise
@@ -69,10 +54,17 @@ interface ISerialisable
 	public function serialise(&$mimeType, $returnBuffer = false, $request = null, $sendHeaders = null /* true if (!$returnBuffer && $request) */);
 }
 
+/* EREGANSU_MINIMAL_CORE is defined when the framework is included inside
+ * WordPress
+ */
 if(defined('EREGANSU_MINIMAL_CORE'))
 {
 	return true;
 }
+
+$EREGANSU_MODULE_MAP['url'] = 'uri';
+$EREGANSU_MODULE_MAP['xmlns'] = 'uri';
+if(!isset($EREGANSU_MODULES)) $EREGANSU_MODULES = array();
 
 /**
  * Determine whether an object or array is traversable as an array
@@ -149,30 +141,27 @@ function writeLn()
 }
 
 
-if(!function_exists('uses')) {
+/**
+ * Include one or more Eregansu modules
+ *
+ * The \f{uses} function loads one or more Eregansu modules. You can specify as
+ * many modules as are needed, each as a separate parameter.
+ *
+ * @type void
+ * @param[in] string $module,... The name of a module to require. For example, \l{base32}.
+ */
 
-	/**
-	 * Include one or more Eregansu modules
-	 *
-	 * The \f{uses} function loads one or more Eregansu modules. You can specify as
-	 * many modules as are needed, each as a separate parameter.
-	 *
-	 * @type void
-	 * @param[in] string $module,... The name of a module to require. For example, \l{base32}.
-	 */
+function uses($module /* ... */)
+{
+	global $EREGANSU_MODULE_MAP, $EREGANSU_MODULES;
 
-	function uses($module)
+	$_modules = func_get_args();
+	foreach($_modules as $_mod)
 	{
-		static $_map = array('url' => 'uri', 'xmlns' => 'uri');
-
-		$_modules = func_get_args();
-		foreach($_modules as $_mod)
-		{
-			$_mod = isset($_map[$_mod]) ? $_map[$_mod] : $_mod;
-			require_once(dirname(__FILE__) . '/' . $_mod . '.php');
-		}	
+		$_mod = isset($EREGANSU_MODULE_MAP[$_mod]) ? $EREGANSU_MODULE_MAP[$_mod] : $_mod;
+		$_mod = isset($EREGANSU_MODULES[$_mod]) ? $EREGANSU_MODULES[$_mod] : dirname(__FILE__) . '/' . $_mod . '.php';
+		require_once($_mod);
 	}
-
 }
 
 /**
@@ -273,10 +262,6 @@ if(!defined('PLATFORM_LIB'))
 {
 	define('PLATFORM_LIB', PLATFORM_ROOT . 'lib/');
 }
-if(!defined('PLATFORM_FRAMEWORK'))
-{
-	define('PLATFORM_FRAMEWORK', PLATFORM_ROOT . 'framework/');
-}
 if(!defined('CONFIG_ROOT'))
 {
 	define('CONFIG_ROOT', INSTANCE_ROOT . 'config/');
@@ -292,6 +277,8 @@ if(!defined('MODULES_ROOT'))
 		define('MODULES_ROOT', INSTANCE_ROOT . 'app/');
 	}
 }
+if(!defined('PLUGINS_ROOT')) define('PLUGINS_ROOT', INSTANCE_ROOT . 'plugins/');
+
 $MODULE_ROOT = MODULES_ROOT;
 
 /**
@@ -312,7 +299,6 @@ $MODULE_ROOT = MODULES_ROOT;
 $AUTOLOAD_SUBST = array();
 $AUTOLOAD_SUBST['${lib}'] = PLATFORM_LIB;
 $AUTOLOAD_SUBST['${instance}'] = INSTANCE_ROOT;
-$AUTOLOAD_SUBST['${platform}'] = PLATFORM_FRAMEWORK;
 $AUTOLOAD_SUBST['${modules}'] = MODULES_ROOT;
 $AUTOLOAD_SUBST['${module}'] =& $MODULE_ROOT;
 
