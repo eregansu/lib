@@ -1,6 +1,6 @@
 <?php
 
-/* Copyright 2011-2012 Mo McRoberts.
+/* Copyright 2011-2013 Mo McRoberts.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ class TestConstants extends TestHarness
 		if(!$this->expectPath('PUBLIC_ROOT', INSTANCE_ROOT)) return false;
 		if(!$this->expectPath('PLATFORM_ROOT', dirname(__FILE__) . '/../../')) return false;
 		if(!$this->expectPath('PLATFORM_LIB', PLATFORM_ROOT . 'lib/')) return false;
-		if(!$this->expectPath('PLATFORM_FRAMEWORK', PLATFORM_ROOT . 'framework/')) return false;
 		if(!$this->expectPath('CONFIG_ROOT', INSTANCE_ROOT . 'config/')) return false;
 		if(!$this->expectPath('MODULES_ROOT', INSTANCE_ROOT . 'app/')) return false;
 		if(!$this->expectPath('PLUGINS_ROOT', INSTANCE_ROOT . 'plugins/')) return false;
