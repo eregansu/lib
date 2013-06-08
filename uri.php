@@ -300,9 +300,13 @@ class URI implements ArrayAccess
 		self::$schemes =& $URI_SCHEMES;
 		if(isset($URI_SCHEMES) && is_array($URI_SCHEMES))
 		{
-			foreach($URI_SCHEMES as $scheme => $class)
+			foreach($URI_SCHEMES as $scheme => $info)
 			{
-				stream_wrapper_register($scheme, $class, STREAM_IS_URL);
+                if(isset($info['VFS']))
+                {
+                    $class = is_array($info['VFS']) ? $info['VFS']['class'] : $info['VFS'];
+				    stream_wrapper_register($scheme, $class, STREAM_IS_URL);
+                }
 			}
 		}
 	}
