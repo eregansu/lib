@@ -63,15 +63,15 @@ class Session
 	 * @param[in] Request $request The request which should be attached to the session
 	 * @returns An instance of the Sesssion class (or one of its descendants)
 	 */
-	public static function sessionForRequest($request)
-	{
-		if(defined('SESSION_CLASS'))
-		{	
-			$name = SESSION_CLASS;
-			return new $name($request);
-		}
-		return new Session($request);
-	}
+    public static function sessionForRequest($request)
+    {
+        if(defined('SESSION_CLASS'))
+        {	
+            $name = SESSION_CLASS;
+            return new $name($request);
+        }
+        return null;
+    }
 	
 	/**
 	 * @fn __construct($request)
