@@ -191,7 +191,7 @@ abstract class MIME
 	 * @internal
 	 */
 	protected static $map = array(
-		'text/html' => array('html', 'mp', 'htm'),
+		'text/html' => array('html', 'htm'),
 		'text/plain' => array('text', 'txt'),
 		'text/rtf' => array('rtf'),
 		'text/xml' => array('xml'),
@@ -205,6 +205,7 @@ abstract class MIME
 		'application/xhtml+xml' => array('xhtml'),
 		'application/vnd.ctv.xhtml+xml' => array('ctv'),
 		'application/vnd.hbbtv.xhtml+xml' => array('hbbtv'),
+        'application/vnd.wap.xhtml+xml' => array('mp'),
 		'application/rss+xml' => array('rss'),
 		'application/rdf+xml' => array('rdf'),
 		'application/atom+xml' => array('atom'),		
