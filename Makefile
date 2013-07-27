@@ -7,8 +7,14 @@ tests:
 	cd t && $(MAKE)
 
 docs:
-	rm -rf docs
-	php -f gendoc/gendoc.php -- -o docs .
+	@if test -d ../docs ; then \
+		rm -rf ../docs/lib ; \
+		mkdir ../docs/lib ; \
+		echo "Generating documentation in ../docs/lib" >&2 ; \
+		php -f ../gendoc/gendoc.php -- -o ../docs/lib . || exit $? ; \
+	else \
+		echo "Warning: not generating docs because ../docs does not exist" >&2 ; \
+	fi
 
 install: all
 	mkdir -p $(DESTDIR)$(phpincdir)/eregansu
