@@ -175,6 +175,10 @@ function autoload_handler($name)
 	if(isset($AUTOLOAD[strtolower($name)]))
 	{
 		$path = str_replace(array_keys($AUTOLOAD_SUBST), array_values($AUTOLOAD_SUBST), $AUTOLOAD[strtolower($name)]);
+		if(defined('EREGANSU_DEBUG_AUTOLOAD') && EREGANSU_DEBUG_AUTOLOAD)
+		{
+			echo "Autoloading <$path>\n";
+		}
 		require_once($path);
 		return true;
 	}
