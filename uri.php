@@ -46,7 +46,26 @@ interface IVFS
 {
 }
 
-class URI implements ArrayAccess
+/* If Redland is present, the URI class should wrap librdf_uri */
+if(function_exists('librdf_new_uri'))
+{
+	require_once(dirname(__FILE__) . '/redland.php');
+
+	class URIBase extends RedlandURI
+	{
+	}
+}
+else
+{
+	class URIBase
+	{
+		public function __construct()
+		{
+		}
+	}
+}
+
+class URI extends URIBase implements ArrayAccess
 {
 	/* Well-known namespace prefixes */
 	const xml = 'http://www.w3.org/XML/1998/namespace';
@@ -530,6 +549,16 @@ class URI implements ArrayAccess
 	
 	public function __construct($url, $base = null)
 	{
+		parent::__construct($url, $base);
+		if(is_resource($url))
+		{
+			$url = librdf_uri_to_string($url);
+			$base = null;
+		}
+		else if($base !== null && (is_string($base) || is_array($base)))
+		{
+			$base = new URI($base);
+		}
 		if(is_string($url) && !strncmp($url, '_:', 2))
 		{
 			$url = array('scheme' => '_', 'path' => substr($url, 2), 'options' => array());
@@ -551,10 +580,6 @@ class URI implements ArrayAccess
 		if(isset($url['data'])) $this->data = $url['data'];
 		if($base !== null)
 		{
-			if(is_string($base) || is_array($base))
-			{
-				$base = new URL($base);
-			}
 			if(!isset($this->scheme))
 			{
 				$this->scheme = $base->scheme;
