@@ -326,8 +326,6 @@ $AUTOLOAD = array(
 	'base32' => dirname(__FILE__) . '/base32.php',
 	'clirequest' => dirname(__FILE__) . '/cli.php',
 	'csvimport' => dirname(__FILE__) . '/csv-import.php',
-	'curl' => dirname(__FILE__) . '/curl.php',
-	'curlcache' => dirname(__FILE__) . '/curl.php',  
 	'dbcore' => dirname(__FILE__) . '/db.php',
 	'dbschema' => dirname(__FILE__) . '/dbschema.php',
 	'mime' => dirname(__FILE__) . '/mime.php',	
@@ -344,6 +342,13 @@ $AUTOLOAD = array(
 	'xmlparser' => dirname(__FILE__) . '/xml.php',
 	'xmlns' => dirname(__FILE__) . '/uri.php',
 	);
+
+if(function_exists('curl_init'))
+{
+	$AUTOLOAD['curl'] = dirname(__FILE__) . '/curl.php';
+	$AUTOLOAD['curlcache'] = dirname(__FILE__) . '/curl.php';
+	$AUTOLOAD['curlheaders'] = dirname(__FILE__) . '/curl.php';
+}
 
 if(function_exists('spl_autoload_register'))
 {
