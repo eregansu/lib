@@ -1,6 +1,6 @@
 <?php
 
-/* Copyright 2009-2011 Mo McRoberts.
+/* Copyright 2009-2013 Mo McRoberts.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -188,6 +188,12 @@ if(function_exists('curl_init'))
 		protected $options = array();
 		protected $info = null;
 
+		protected $cachedInfo = null;
+
+		/* The ICache instance to use, if any */
+		public $cache;
+		/* Whether error responses should be cached or not */
+		public $cacheErrors = false;
 		public $headers;
 		public $receivedHeaders = array();
 
@@ -289,7 +295,8 @@ if(function_exists('curl_init'))
 			return $string;
 		}
 					
-		public function exec($_applyHeaders_internal = true)
+		/* Force a fetch without use of the cache */
+		public function execNoCache()
 		{
 			if(!$this->handle)
 			{
@@ -304,20 +311,17 @@ if(function_exists('curl_init'))
 					$this->__set('authData', $auth);
 				}
 			}
-			if($_applyHeaders_internal)
+			if(is_object($this->headers))
 			{
-				if(is_object($this->headers))
-				{
-					$this->headers->apply($this->handle);
-				}
-				else if(is_array($this->headers))
-				{
-					curl_setopt($this->handle, CURLOPT_HTTPHEADER, $this->headers);
-				}
-				else if($this->headers !== null)
-				{
-					trigger_error('Curl::exec() - $this->headers is non-null but is not an array or a CurlHeaders instance', E_USER_NOTICE);
-				}
+				$this->headers->apply($this->handle);
+			}
+			else if(is_array($this->headers))
+			{
+				curl_setopt($this->handle, CURLOPT_HTTPHEADER, $this->headers);
+			}
+			else if($this->headers !== null)
+			{
+				trigger_error('Curl::exec() - $this->headers is non-null but is not an array or a CurlHeaders instance', E_USER_NOTICE);
 			}
 			$r = curl_exec($this->handle);
 			$this->info = curl_getinfo($this->handle);
@@ -330,6 +334,157 @@ if(function_exists('curl_init'))
 				}
 			}
 			return $r;
+		}
+		
+		public function exec()
+		{
+			$this->info = null;
+			$fetch = true;
+			$store = true;
+			$info = null;
+			$modifiedSince = null;
+			if(!$this->handle)
+			{
+				trigger_error('Curl::exec() - cannot execute a request which has been closed', E_USER_ERROR);
+				return false;
+			}
+			$this->receivedHeaders = array();
+			if(!isset($this->options['authData']))
+			{
+				if(null !== ($auth = $this->authDataForURL($this->options['url'])))
+				{
+					$this->__set('authData', $auth);
+				}
+			}
+			if(is_object($this->headers))
+			{
+				$this->headers->apply($this->handle);
+			}
+			else if(is_array($this->headers))
+			{
+				curl_setopt($this->handle, CURLOPT_HTTPHEADER, $this->headers);
+			}
+			else if($this->headers !== null)
+			{
+				trigger_error('CurlCache::exec() - $this->headers is non-null but is not an array or a CurlHeaders instance', E_USER_NOTICE);
+			}
+			/* Generate the hash which is used for fingerprinting from a subset of
+			 * the curl options (which includes the verb and URL)
+			 */
+			$hashedOptions = $this->options;
+			/* Exclude some options which don't affect the transfer itself
+			 * from the request fingerprinting.
+			 */
+			$hashedOptions['forbidReuse'] = false;
+			$hashedOptions['dnsUseGlobalCache'] = true;
+			$hashedOptions['verbose'] = false;
+			$hash = md5(json_encode($hashedOptions));
+			if($this->cache === null)
+			{
+				/* If there's no cache file, there's nowhere to cache the
+				 * response.
+				 */
+				$store = false;
+				$mtime = null;
+			}
+			else
+			{
+				$mtime = $this->cache->modified($hash);
+			}
+			if(empty($this->options['httpGET']))
+			{
+				/* If it's not a GET request, always fetch */
+				$fetch = true;
+				$store = false;
+			}
+			if($mtime !== null)
+			{
+				/* If the cache file exists, check the timestamp exceeds
+				 * the mininum cache time and determine what the
+				 * If-Modified-Since header would be.
+				 */
+				$modifiedSince = strftime('%a, %e %b %Y %H:%M:%S UTC', $mtime);
+				if($this->cache->min > 0)
+				{
+					if($mtime + $this->cache->min > time())
+					{
+						/* The resource hasn't reached its minimum cache-time
+						 * threshold yet.
+						 */
+						$fetch = false;
+					}
+					if($this->cache->max !== null && $mtime + $this->cache->min < time())
+					{
+						/* We've exceeded the maximum cache time, and so
+						   must refresh
+						*/
+						$modifiedSince = null;
+						$fetch = true;
+					}
+				}
+			}
+			if($modifiedSince !== null)
+			{
+				if(!isset($this->headers['If-Modified-Since']))
+				{
+					$this->headers['If-Modified-Since'] = $modifiedSince;
+					if(is_object($this->headers))
+					{
+						$this->headers->apply($this->handle);
+					}
+					else if(is_array($this->headers))
+					{
+						curl_setopt($this->handle, CURLOPT_HTTPHEADER, $this->headers);
+					}
+				}
+			}
+			if($fetch)
+			{
+				$buf = curl_exec($this->handle);
+				$this->info = curl_getinfo($this->handle);
+				$this->info['content_location'] = null;
+				foreach($this->receivedHeaders as $k => $v)
+				{
+					if(!strcasecmp($k, 'Content-Location'))
+					{
+						$this->info['content_location'] = $v;
+					}
+				}
+				$info = $this->info;
+				if($info['http_code'] == 304 && $modifiedSince !== null)
+				{
+					/* The document is unmodified */
+					$buf = $this->cache->payload($hash);
+					$info = $this->cache->meta($hash);
+					$info['hash'] = $hash;
+				}
+				else if($store && ($buf !== false || $this->cacheErrors))
+				{
+					/* Store the document in the cache file */
+					$f = $this->cache->stream($hash, 'wb');
+					fwrite($f, $buf);
+					fclose($f);
+					$this->cache->setMeta($hash, $info);
+					$info['fetched'] = true;
+					$info['hash'] = $hash;
+				}
+			}
+			else if($mtime !== null)
+			{
+				/* We didn't need to fetch to begin with, just return the
+				 * cached resource.
+				 */
+				$buf = $this->cache->payload($hash);
+				$info = $this->cache->meta($hash);
+				$info['hash'] = $hash;
+			}
+			else
+			{
+				/* If all else fails, bail */
+				$buf = $info = null;
+			}
+			$this->info = $info;
+			return $buf;
 		}
 		
 		public function __get($name)
@@ -419,211 +574,15 @@ if(function_exists('curl_init'))
 
 	class CurlCache extends Curl
 	{
-		public $cacheFile = null;
-		public $cacheDir = null;
-		public $cacheTime = null; /* Minimum time to cache for */
-		public $cacheMax = null; /* Maximum time to cache for */
-		public $cacheErrors = false;
-		protected $cachedInfo = null;
-
-		public function exec($_applyHeaders_internal = true)
-		{
-			$this->cachedInfo = null;
-			$fetch = true;
-			$store = true;
-			$dir = $this->cacheDir;
-			$time = $this->cacheTime;
-			$max = $this->cacheMax;
-			$cacheFile = $this->cacheFile;
-			$info = null;
-			$modifiedSince = null;
-			if($_applyHeaders_internal)
+		public function __construct($url = null)
+		{		
+			parent::__construct($url);
+			require_once(dirname(__FILE__) . '/cache.php');
+			if($this->cache === null)
 			{
-				if(is_object($this->headers))
-				{
-					$this->headers->apply($this->handle);
-				}
-				else if(is_array($this->headers))
-				{
-					curl_setopt($this->handle, CURLOPT_HTTPHEADER, $this->headers);
-				}
-				else if($this->headers !== null)
-				{
-					trigger_error('CurlCache::exec() - $this->headers is non-null but is not an array or a CurlHeaders instance', E_USER_NOTICE);
-				}
+				$this->cache = new DiskCache('curl');
 			}
-			$hashedOptions = $this->options;
-			/* Exclude some options which don't affect the transfer itself
-			 * from the request fingerprinting.
-			 */
-			$hashedOptions['forbidReuse'] = false;
-			$hashedOptions['dnsUseGlobalCache'] = true;
-			$hashedOptions['verbose'] = false;
-			$hash = md5(json_encode($hashedOptions));
-			if(!strlen($cacheFile))
-			{
-				/* If no cache file was explicitly specified */
-				if(!strlen($dir))
-				{
-					if(defined('CURL_CACHE_DIR'))
-					{
-						$dir = CURL_CACHE_DIR;
-					}
-					else if(defined('CACHE_DIR'))
-					{
-						$dir = CACHE_DIR . 'curl/';
-					}
-					else
-					{
-						if(defined('CURL_WARN_MISSING_CACHE'))
-						{
-							trigger_error('$this->cacheDir is not set and CACHE_DIR is not defined', E_USER_WARNING);
-						}
-					}
-				}
-				if(strlen($dir))
-				{
-					if(substr($dir, -1) != '/')
-					{
-						$dir .= '/';
-					}					
-					$cacheFile = $dir . $hash;
-				}
-			}
-			if(!strlen($cacheFile))
-			{
-				/* If there's no cache file, there's nowhere to cache the
-				 * response.
-				 */
-				$store = false;
-			}
-			if($time === null)
-			{
-				if(defined('CACHE_TIME'))
-				{
-					$time = intval(CACHE_TIME);
-				}
-				else
-				{
-					$time = 0;
-				}
-			}
-			else
-			{
-				$time = intval($time);
-			}
-			if($max === null)
-			{
-				if(defined('CACHE_MAX'))
-				{
-					if(CACHE_MAX !== null)
-					{
-						$max = intval(CACHE_MAX);
-					}
-				}
-			}
-			if(empty($this->options['httpGET']))
-			{
-				/* If it's not a GET request, always fetch */
-				$fetch = true;
-				$store = false;
-			}
-			if(strlen($cacheFile) && file_exists($cacheFile) && file_exists($cacheFile . '.json'))
-			{
-				/* If the cache file exists, check the timestamp exceeds
-				 * the mininum cache time and determine what the
-				 * If-Modified-Since header would be.
-				 */
-				$info = stat($cacheFile);
-				$modifiedSince = strftime('%a, %e %b %Y %H:%M:%S UTC', $info['mtime']);
-				if($time > 0)
-				{
-					if($info['mtime'] + $time > time())
-					{
-						/* The resource hasn't reached its minimum cache-time
-						 * threshold yet.
-						 */
-						$fetch = false;
-					}
-					if($max !== null && $info['mtime'] + $time < time())
-					{
-						/* We've exceeded the maximum cache time, and so
-						   must refresh
-						*/
-						$modifiedSince = null;
-						$fetch = true;
-					}
-				}
-			}
-			if($modifiedSince !== null && $_applyHeaders_internal)
-			{
-				if(!isset($this->headers['If-Modified-Since']))
-				{
-					$this->headers['If-Modified-Since'] = $modifiedSince;
-					if(is_object($this->headers))
-					{
-						$this->headers->apply($this->handle);
-					}
-					else if(is_array($this->headers))
-					{
-						curl_setopt($this->handle, CURLOPT_HTTPHEADER, $this->headers);
-					}
-				}
-			}
-			if($fetch)
-			{
-				$buf = parent::exec(false);
-				$info = $this->info;
-				if($info['http_code'] == 304 && $modifiedSince !== null)
-				{
-					/* The document is unmodified */
-					$buf = file_get_contents($cacheFile);
-					$info = json_decode(file_get_contents($cacheFile . '.json'), true);
-					$info['cacheFile'] = $cacheFile;
-					$info['hash'] = $hash;
-				}
-				else if($store && ($buf !== false || $this->cacheErrors))
-				{
-					/* Store the document in the cache file */
-					$f = fopen($cacheFile, 'w');
-					fwrite($f, $buf);
-					fclose($f);
-					$f = fopen($cacheFile . '.json', 'w');
-					fwrite($f, json_encode($info));
-					fclose($f);
-					$info['fetched'] = true;
-					$info['hash'] = $hash;
-					$info['cacheFile'] = $cacheFile;
-				}
-			}
-			else if(strlen($cacheFile))
-			{
-				/* We didn't need to fetch to begin with, just return the
-				 * cached resource.
-				 */
-				$buf = file_get_contents($cacheFile);
-				$info = json_decode(file_get_contents($cacheFile . '.json'), true);
-				$info['cacheFile'] = $cacheFile;
-				$info['hash'] = $hash;
-			}
-			else
-			{
-				/* If all else fails, bail */
-				$buf = $info = null;
-			}
-			$this->cachedInfo = $info;
-			return $buf;
 		}
-
-		public function __get($name)
-		{
-			if($name == 'info')
-			{
-				return $this->cachedInfo;
-			}
-			return parent::__get($name);
-		}
-
 	}
 }
 
