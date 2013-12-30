@@ -163,6 +163,7 @@ if(function_exists('openssl_pkey_get_public'))
 	$AUTOLOAD['privatekey'] = dirname(__FILE__) . '/pk.php';
 	$AUTOLOAD['rsapublickey'] = dirname(__FILE__) . '/pk.php';
 	$AUTOLOAD['rsaprivatekey'] = dirname(__FILE__) . '/pk.php';
+	$AUTOLOAD['x509'] = dirname(__FILE__) . '/x509.php';
 }
 
 /* Configure a consistent environment */
