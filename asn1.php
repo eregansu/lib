@@ -2,7 +2,7 @@
 
 /* Eregansu: ASN.1 Utilities
  *
- * Copyright 2011 Mo McRoberts.
+ * Copyright 2011-2013 Mo McRoberts.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -150,5 +150,17 @@ abstract class ASN1
 			$binary = substr($binary, $len);
 		}
 		return $output;
+	}
+	
+	/* As ASN1::decodeBER(), but accept a PEM-encoded string (with leader and trailer) instead */
+	public static function decodePEM($pemStr)
+	{
+		$matches = array();
+		if(preg_match('!^-----BEGIN ([A-Z ]+)-----\s*?([A-Za-z0-9+=/\r\n]+)\s*?-----END \1-----\s*$!D', $pemStr, $matches))
+		{
+			$binary = base64_decode(str_replace(array("\r", "\n"), array('', ''), $matches[2]));
+			return self::decodeBER($binary);
+		}		
+		return null;
 	}
 }
