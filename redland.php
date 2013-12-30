@@ -458,7 +458,7 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 		$serializer = RedlandSerializer::create($serializerName, $mimeType, $typeUri, $this->dependents[0]);
 		if($serializer === null)
 		{
-			throw new Exception('Failed to create serializer')				
+			throw new Exception('Failed to create serializer');
 		}
 		return $serializer->serializeModelToString($this, $baseUri);
 	}
