@@ -322,20 +322,25 @@ $AUTOLOAD_SUBST['${module}'] =& $MODULE_ROOT;
  */
  
 $AUTOLOAD = array(
+	/* Interfaces */
+	'icache' => dirname(__FILE__) . '/cache.php',
+	'iobservable' => dirname(__FILE__) . '/observer.php',
+	'ivfs' => dirname(__FILE__) . '/uri.php',
+	/* Classes */
 	'asn1' => dirname(__FILE__) . '/asn1.php',
 	'base32' => dirname(__FILE__) . '/base32.php',
+	'cache' => dirname(__FILE__) . '/cache.php',
 	'clirequest' => dirname(__FILE__) . '/cli.php',
 	'csvimport' => dirname(__FILE__) . '/csv-import.php',
-	'dbcore' => dirname(__FILE__) . '/db.php',
-	'dbschema' => dirname(__FILE__) . '/dbschema.php',
+	'eregansudatetime' => dirname(__FILE__) . '/date.php',
+	'httprequest' => dirname(__FILE__) . '/request.php',
 	'mime' => dirname(__FILE__) . '/mime.php',	
+	'persistentsession' => dirname(__FILE__) . '/session.php',
 	'rdf' => dirname(__FILE__) . '/rdf.php',
 	'rdfxmlstreamparser' => dirname(__FILE__) . '/rdfxmlstream.php',
 	'request' => dirname(__FILE__) . '/request.php',
-	'httprequest' => dirname(__FILE__) . '/request.php',
 	'session' => dirname(__FILE__) . '/session.php',
-	'searchengine' => dirname(__FILE__) . '/searchengine.php',
-	'searchindexer' => dirname(__FILE__) . '/searchengine.php',
+	'transientsession' => dirname(__FILE__) . '/session.php',
 	'uri' => dirname(__FILE__) . '/uri.php',
 	'url' => dirname(__FILE__) . '/uri.php',
 	'uuid' => dirname(__FILE__) . '/uuid.php',
