@@ -112,7 +112,10 @@ class URI extends URIBase implements ArrayAccess
 	public $query = null;
 	public $fragment = null;
 	public $options = array();
-
+	
+	/* If true, __toString() will return only the path */
+	public $stringifyAsPath;
+	
 	/**** Static methods ****/
 	public static function parse($url)
 	{
@@ -630,10 +633,35 @@ class URI extends URIBase implements ArrayAccess
 				}
 			}
 		}
+		/* Perform path processing */
+		$components = array();
+		$ua = explode('/', $this->path);
+		foreach($ua as $s)
+		{
+			if(!strlen($s)) continue;
+			$components[] = $s;
+		}
+		$this->pathComponents = $components;
+		/* Normalise the path components, removing suffixes */
+		$this->parts = array();
+		foreach($components as $part)
+		{
+			$suffixes = explode('.', $part);
+			$this->parts[] = array_shift($suffixes);
+			foreach($suffixes as $k => $v)
+			{
+				if(!strlen($v)) unset($suffixes[$k]);
+			}
+			$this->suffixes = $suffixes;
+		}
 	}
 
 	public function __toString()
 	{
+		if($this->stringifyAsPath)
+		{
+			return strval($this->path);
+		}
 		if($this->scheme == 'urn' || $this->scheme == 'tag' || $this->scheme == 'javascript' || $this->scheme == 'about' || $this->scheme == 'wysiwyg' || $this->scheme == 'view-source' || $this->scheme == 'mailto' || $this->scheme == '_')
 		{
 			return $this->scheme . ':' . $this->path;
