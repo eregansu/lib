@@ -56,7 +56,7 @@ abstract class RedlandBase
 		}
 		if(!is_object($value) || !($value instanceof $className))
 		{
-			throw new Exception('Argument ' . $pos . ' passed to ' . $method . '() must be null or a ' . $type . ' instance');
+			throw new Exception('Argument ' . $pos . ' passed to ' . $method . '() must be null or a ' . $className . ' instance');
 		}
 		return $value;
 	}
@@ -299,6 +299,13 @@ class RedlandSerializer extends RedlandBase
 	public function serializeModelToString(RDFGraph $model, $baseUri = null)
 	{
 		$baseUri = self::checkNullOrInstance($baseUri, 'RedlandURI', 2, 'RedlandSerializer::serializeModelToString');
+		$ns = URI::namespaces();
+		foreach($ns as $uri => $prefix)
+		{
+			if($prefix == 'xml' || $prefix == 'xmlns') continue;
+			$uri = new URI($uri);
+			librdf_serializer_set_namespace($this->resource, $uri->resource, $prefix);
+		}
 		return librdf_serializer_serialize_model_to_string($this->resource, ($baseUri === null ? null : $baseUri->resource), $model->resource);
 	}
 }
@@ -387,6 +394,18 @@ class RedlandStream extends RedlandBase implements Iterator
 
 class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 {
+	public static $defaultLanguages = array('en');
+
+	protected static $serialisations;
+	protected static $knownSerialisations = array(
+		'text/turtle' => array('name' => 'turtle', 'title' => 'Turtle', 'q' => 0.9),
+		'application/trig' => array('name' => 'trig', 'title' => 'TriG', 'q' => 0.95),
+		'application/rdf+xml' => array('name' => 'rdfxml-abbrev', 'title' => 'RDF/XML', 'q' => 0.75),
+		'application/n-quads' => array('name' => 'nquads', 'title' => 'NQuads', 'q' => 0.85),
+		'application/n-triples' => array('name' => 'ntriples', 'title' => 'NTriples', 'q' => 0.8),
+		'application/rdf+json' => array('name' => 'json', 'title' => 'RDF/JSON', 'q' => 0.75),
+		);
+
 	protected $resourceDestructor = 'librdf_free_model';
 	protected $iterator = null;
 	protected $subjectFilter = null;
@@ -410,6 +429,27 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 		}
 		$inst = new RDFGraph($res, array($world, $storage));
 		return $inst;
+	}
+
+	public function __construct($resource = null, $dependents = null)
+	{
+		if($resource === null)
+		{
+			if($dependents === null)
+			{
+				$dependents = array();
+			}
+			$world = RedlandWorld::get();
+			$dependents[] = $world;
+			$storage = RedlandStorage::get(null, $world);
+			$dependents[] = $storage;
+			$resource = librdf_new_model($world->resource, $storage->resource, null);
+			if(!is_resource($resource))
+			{
+				throw new Exception('Failed to create new librdf_model');
+			}
+		}
+		parent::__construct($resource, $dependents);
 	}
 
 	public function __destruct()
@@ -455,12 +495,36 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 	
 	public function serializeToString($baseUri = null, $mimeType = 'text/turtle', $serializerName = null, $typeUri = null)
 	{
+		if($serializerName === null)
+		{
+			if(isset(self::$knownSerialisations[$mimeType]))
+			{
+				$serializerName = self::$knownSerialisations[$mimeType]['name'];
+				$mimeType = null;
+			}
+		}
 		$serializer = RedlandSerializer::create($serializerName, $mimeType, $typeUri, $this->dependents[0]);
 		if($serializer === null)
 		{
 			throw new Exception('Failed to create serializer');
 		}
 		return $serializer->serializeModelToString($this, $baseUri);
+	}
+
+	public function serialisations()
+	{
+		if(!isset(self::$serialisations))
+		{
+			self::$serialisations = array();
+			foreach(self::$knownSerialisations as $mime => $info)
+			{
+				if(librdf_serializer_check_name($this->dependents[0]->resource, $info['name']))
+				{
+					self::$serialisations[$mime] = $info;
+				}
+			}
+		}
+		return self::$serialisations;
 	}
 
 	public function asStream()
@@ -506,7 +570,7 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 		return (librdf_model_add($this->resource, $subj, $pred, $obj) == 0) ? true : false;
 	}
 
-	public function addStatement(RDFStatement $statement)
+	public function addStatement(RDFTriple $statement)
 	{
 		/* Check that the subject of the statement matches */
 		if(isset($this->subjectFilter))
@@ -534,6 +598,239 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 		return (librdf_model_add_statement($this->resource, $statement->resource) == 0) ? true : false;
 	}
 
+	/* Methods for retrieving sets of values from subject-filtered graphs */
+
+	/* Retrieve a literal value which matches one of the predicates and languages specified,
+	 * in order of preference. If $fallbackFirst is specified, the first literal belonging to
+	 * the listed predicates will be returned.
+	 *
+	 * $string = $subjectModel->lang($predicates, [$langs = self::$defaultLanguages, $fallbackFirst = true]);
+	 *
+	 * $string = $predicateModel->lang([$langs = self::$defaultLanguages, $fallbackFirst = true]);
+	 */
+	public function lang()
+	{
+		if(!isset($this->subjectFilter))
+		{
+			throw new Exception('cannot retrieve values from an unfiltered model');
+		}
+		$args = func_get_args();
+		if(isset($this->predicateFilter))
+		{
+			if(!isset($args[0]))
+			{
+				$args[0] = self::$defaultLanguages;
+			}
+			if(!isset($args[1]))
+			{
+				$args[1] = true;
+			}
+			return $this->predicateLang($args[0], $args[1]);
+		}
+		if(!isset($args[0]))
+		{
+			trigger_error('Missing argument 1 in call to RDFGraph::lang()', E_USER_WARNING);
+			return null;
+		}
+		if(!isset($args[1]))
+		{
+			$args[1] = self::$defaultLanguages;
+		}
+		if(!isset($args[2]))
+		{
+			$args[2] = true;
+		}
+		return $this->subjectLang($args[0], $args[1], $args[2]);
+	}
+	
+	protected function predicateLang($langs, $fallbackFirst)
+	{
+		if(!is_array($langs))
+		{
+			$langs = explode(',',str_replace(' ', ',', $langs));
+		}
+		$value = null;
+		$first = null;
+		foreach($langs as $lang)
+		{
+			$lang = trim($lang);
+			if(!strlen($lang))
+			{
+				continue;
+			}
+			/* Ownership of the nodes is transferred to the statement */
+			$subj = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->subjectFilter);
+			$pred = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->predicateFilter);
+			$query = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, $pred, null);
+			$iterator = librdf_model_find_statements($this->resource, $query);
+			librdf_free_statement($query);
+			while(!librdf_stream_end($iterator))
+			{
+				$statement = librdf_stream_get_object($iterator);
+				$object = librdf_statement_get_object($statement);
+				if(librdf_node_is_literal($object))
+				{
+					if($first === null)
+					{
+						$first = librdf_node_get_literal_value($object);
+					}
+					if(!strcmp($lang, librdf_node_get_literal_value_language($object)))
+					{
+						$value = librdf_node_get_literal_value($object);
+						break;
+					}
+				}
+				librdf_stream_next($iterator);
+			}
+			librdf_free_stream($iterator);
+			if($value !== null) break;
+		}
+		if($fallbackFirst && $value === null)
+		{
+			return $first;
+		}
+		return $value;
+	}
+
+	protected function subjectLang($predicates, $langs, $fallbackFirst)
+	{
+		if(!is_array($predicates))
+		{
+			$predicates = array($predicates);
+		}
+		if(!is_array($langs))
+		{
+			$langs = explode(',',str_replace(' ', ',', $langs));
+		}
+		$value = null;
+		$first = null;
+		foreach($langs as $lang)
+		{
+			$lang = trim($lang);
+			if(!strlen($lang))
+			{
+				continue;
+			}
+			foreach($predicates as $predicateUri)
+			{
+				$predicateUri = URI::expandUri($predicateUri, true);
+				/* Ownership of the nodes is transferred to the statement */
+				$subj = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->subjectFilter);
+				$pred = librdf_new_node_from_uri_string($this->dependents[0]->resource, $predicateUri);
+				$query = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, $pred, null);
+				/* Ownership of the query statement is transferred to the
+				 * stream; we must not free it ourselves.
+				 */
+				$iterator = librdf_model_find_statements($this->resource, $query);
+				librdf_free_statement($query);
+				while(!librdf_stream_end($iterator))
+				{
+					$statement = librdf_stream_get_object($iterator);
+					$object = librdf_statement_get_object($statement);
+					if(librdf_node_is_literal($object))
+					{
+						if($first === null)
+						{
+							$first = librdf_node_get_literal_value($object);
+						}
+						if(!strcmp($lang, librdf_node_get_literal_value_language($object)))
+						{
+							$value = librdf_node_get_literal_value($object);
+							break;
+						}
+					}
+					librdf_stream_next($iterator);
+				}
+				librdf_free_stream($iterator);
+				if($value !== null) break;
+			}
+			if($value !== null) break;
+		}
+		if($fallbackFirst && $value === null)
+		{
+			return $first;
+		}
+		return $value;
+	}
+
+	public function title($langs = null, $fallbackFirst = true)
+	{
+		if(isset($this->predicateFilter))
+		{
+			throw new Exception('Cannot obtain a title from a predicate-filtered model');
+		}
+		return $this->lang(array(
+							   URI::skos.'prefLabel',
+							   'http://www.w3.org/2004/02/skos/core#prefLabel',
+							   URI::gn.'name',
+							   URI::foaf.'name',
+							   URI::rdfs.'label',
+							   URI::dcterms.'title',
+							   URI::dc.'title',
+							   URI::skos.'altLabel',
+							   'http://www.w3.org/2004/02/skos/core#altLabel',
+							   ), $langs, $fallbackFirst);
+	}
+
+	public function description($langs = null, $fallbackFirst = true)
+	{
+		if(isset($this->predicateFilter))
+		{
+			throw new Exception('Cannot obtain a description from a predicate-filtered model');
+		}
+		return $this->lang(
+			array(
+				'http://purl.org/ontology/po/medium_synopsis',
+				URI::rdfs . 'comment',
+				'http://purl.org/ontology/po/short_synopsis',
+				'http://purl.org/ontology/po/long_synopsis',
+				URI::dcterms . 'description',
+				'http://dbpedia.org/ontology/abstract',
+				URI::dc . 'description',
+				), $langs, $fallbackFirst);
+	}
+        
+	public function shortDesc($langs = null, $fallbackFirst = true)
+	{
+		if(isset($this->predicateFilter))
+		{
+			throw new Exception('Cannot obtain a description from a predicate-filtered model');
+		}
+		return $this->lang(
+			array(
+				'http://purl.org/ontology/po/short_synopsis',
+				), $langs, $fallbackFirst);
+	}
+
+	public function mediumDesc($langs = null, $fallbackFirst = true)
+	{
+		if(isset($this->predicateFilter))
+		{
+			throw new Exception('Cannot obtain a description from a predicate-filtered model');
+		}
+		return $this->lang(
+			array(
+				'http://purl.org/ontology/po/medium_synopsis',
+				URI::rdfs . 'comment',
+				), $langs, $fallbackFirst);
+	}
+
+	public function longDesc($langs = null, $fallbackFirst = true)
+	{
+		if(isset($this->predicateFilter))
+		{
+			throw new Exception('Cannot obtain a description from a predicate-filtered model');
+		}
+		return $this->lang(
+			array(
+				'http://purl.org/ontology/po/long_synopsis',
+				URI::dcterms . 'description',
+				'http://dbpedia.org/ontology/abstract',
+				URI::dc . 'description',
+				), $langs, $fallbackFirst);
+	}
+
+
 	/* Iterator methods */
 
 	public function rewind()
@@ -557,10 +854,8 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 				$pred = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->predicateFilter);
 			}
 			$query = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, $pred, null);
-			/* Ownership of the query statement is transferred to the
-			 * stream; we must not free it ourselves.
-			 */
 			$this->iterator = librdf_model_find_statements($this->resource, $query);
+			librdf_free_statement($query);
 		}
 		else
 		{
@@ -690,6 +985,7 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 			$pred = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->predicateFilter);
 			$query = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, $pred, null);
 			$iterator = librdf_model_find_statements($this->resource, $query);
+			librdf_free_statement($query);
 			$node = null;
 			for($c = 0; !librdf_stream_end($iterator); $c++)
 			{
@@ -708,6 +1004,8 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 		 * match any existing triples, but the resulting filtered model will allow new triples
 		 * to be added.
 		 */
+		/* The key may be a short form, e.g., foaf:page */
+		$key = URI::expandUri($key, true);
 		$node = librdf_new_node_from_uri_string($this->dependents[0]->resource, $key);
 		if(!is_resource($node))
 		{
@@ -797,7 +1095,7 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 				}
 				/* $subjectModel[$predicateUri] = $node; */
 				$subj = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->subjectFilter);
-				$pred = librdf_new_node_from_uri_string($this->dependents[0]->resource, $key);
+				$pred = librdf_new_node_from_uri_string($this->dependents[0]->resource, URI::expandUri($key, true));
 				$obj = librdf_new_node_from_node($value->resource);
 				/* The created nodes become owned by the model */
 				librdf_model_add($this->resource, $subj, $pred, $obj);
@@ -846,6 +1144,19 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 			librdf_model_add_statement($value->resource);
 			return;
 		}
+		if($value instanceof RDFGraph)
+		{
+			if(isset($value->predicateFilter) &&
+			   (isset($this->predicateFilter) || (isset($this->subjectFilter) && $key !== null)))
+			{
+				foreach($value as $node)
+				{
+					$this->offsetSet($key, $node);
+				}
+				return;
+			}
+            /* Fall through */
+		}
 		if(is_resource($value))
 		{
 			throw new Exception('unable to add a ' . get_resource_type($value) . ' to a model');
@@ -870,6 +1181,7 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 			$pred = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->predicateFilter);
 			$query = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, $pred, null);
 			$iterator = librdf_model_find_statements($this->resource, $query);
+			librdf_free_statement($query);
 			for($c = 0; !librdf_stream_end($iterator); $c++)
 			{
 				if($c == $key)
@@ -888,6 +1200,7 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 			$pred = librdf_new_node_from_uri_string($this->dependents[0]->resource, $key);
 			$query = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, $pred, null);
 			$iterator = librdf_model_find_statements($this->resource, $query);
+			librdf_free_statement($query);
 			if(!librdf_stream_end($iterator))
 			{
 				$found = true;
@@ -900,6 +1213,7 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 			$subj = librdf_new_node_from_uri_string($this->dependents[0]->resource, $key);
 			$query = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, null, null);
 			$iterator = librdf_model_find_statements($this->resource, $query);
+			librdf_free_statement($query);
 			if(!librdf_stream_end($iterator))
 			{
 				$found = true;
@@ -925,6 +1239,7 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 			$pred = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->predicateFilter);
 			$query = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, $pred, null);
 			$iterator = librdf_model_find_statements($this->resource, $query);
+			librdf_free_statement($query);
 			for($c = 0; !librdf_stream_end($iterator); $c++)
 			{
 				if($c == $key)
@@ -944,6 +1259,7 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 			$pred = librdf_new_node_from_uri_string($this->dependents[0]->resource, $key);
 			$query = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, $pred, null);
 			$iterator = librdf_model_find_statements($this->resource, $query);
+			librdf_free_statement($query);
 			while(!librdf_stream_end($iterator))
 			{
 				$statement = librdf_stream_get_object($iterator);
@@ -958,6 +1274,7 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 			$subj = librdf_new_node_from_uri_string($this->dependents[0]->resource, $key);
 			$query = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, null, null);
 			$iterator = librdf_model_find_statements($this->resource, $query);
+			librdf_free_statement($query);
 			while(!librdf_stream_end($iterator))
 			{
 				$statement = librdf_stream_get_object($iterator);
@@ -992,6 +1309,24 @@ class RDFTriple extends RedlandBase
 			return null;
 		}
 		return new RDFTriple($res);
+	}
+
+	public static function createFromNodes(RDFNode $subject, RDFNode $predicate, RDFNode $object, $world = null)
+	{		
+		$world = RedlandWorld::get($world);
+		/* The new statement will own the nodes */
+		$subject = clone $subject;
+		$subject->weak = true;
+		$predicate = clone $predicate;
+		$predicate->weak = true;
+		$object = clone $object;
+		$object->weak = true;
+		$res = librdf_new_statement_from_nodes($world->resource, $subject->resource, $predicate->resource, $object->resource);
+		if(!is_resource($res))
+		{
+			return null;
+		}
+		return new RDFTriple($res, $world);
 	}
 
 	public function __toString()
@@ -1124,7 +1459,7 @@ class RDFNode extends RedlandBase
 		{
 			return null;
 		}
-		return new RDFNode($res);
+		return new RDFNode($res, $world);
 	}
 
 	/* Create a URI node from a URI instance of a URI string */
@@ -1143,7 +1478,19 @@ class RDFNode extends RedlandBase
 		{
 			return null;
 		}
-		return new RDFNode($res);
+		return new RDFNode($res, $world);
+	}
+
+	/* Create a langString (e.g., "Hello, world!"@en) */
+	public static function createLangString($string, $lang, $world = null)
+	{
+		$world = RedlandWorld::get($world);
+		$res = librdf_new_node_from_literal($world->resource, $string, $lang, 0);
+		if(!is_resource($res))
+		{
+			return null;
+		}
+		return new RDFNode($res, $world);
 	}
 
 	public function __toString()
@@ -1172,7 +1519,7 @@ class RDFNode extends RedlandBase
 		$res = librdf_node_get_uri($this->resource);
 		if(is_resource($res))
 		{
-			$inst = new RedlandURI($res, $this);
+			$inst = new URI($res, $this);
 			$inst->weak = true;
 			return $inst;
 		}
