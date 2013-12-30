@@ -232,7 +232,6 @@ class RedlandURI extends RedlandBase
 class RedlandParser extends RedlandBase
 {
 	protected $resourceDestructor = 'librdf_free_parser';
-	protected $world;
 
 	public static function create($name = null, $mimeType = null, $typeUri = null, $world = null)
 	{
@@ -277,6 +276,30 @@ class RedlandParser extends RedlandBase
 			return false;
 		}
 		return true;
+	}
+}
+
+class RedlandSerializer extends RedlandBase
+{
+	protected $resourceDestructor = 'librdf_free_serializer';
+	
+	public static function create($name = null, $mimeType = null, $typeUri = null, $world = null)
+	{
+		$world = RedlandWorld::get($world);
+		$typeUri = self::checkNullOrInstance($typeUri, 'RedlandURI', 3, 'RedlandSerializer::create');
+		$res = librdf_new_serializer($world->resource, $name, $mimeType, ($typeUri === null ? null : $typeUri->resource));
+		if(!is_resource($res))
+		{
+			return null;
+		}
+		$inst = new RedlandSerializer($res, $world);
+		return $inst;
+	}
+	
+	public function serializeModelToString(RDFGraph $model, $baseUri = null)
+	{
+		$baseUri = self::checkNullOrInstance($baseUri, 'RedlandURI', 2, 'RedlandSerializer::serializeModelToString');
+		return librdf_serializer_serialize_model_to_string($this->resource, ($baseUri === null ? null : $baseUri->resource), $model->resource);
 	}
 }
 
@@ -423,11 +446,21 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 	public function parse($string, $baseUri = null, $mimeType = 'text/turtle', $parserName = null, $typeUri = null)
 	{
 		$parser = RedlandParser::create($parserName, $mimeType, $typeUri, $this->dependents[0]);
-		if(!$parser)
+		if($parser === null)
 		{
 			throw new Exception('Failed to create parser');
 		}
 		return $parser->parseStringIntoModel($string, $baseUri, $this);
+	}
+	
+	public function serializeToString($baseUri = null, $mimeType = 'text/turtle', $serializerName = null, $typeUri = null)
+	{
+		$serializer = RedlandSerializer::create($serializerName, $mimeType, $typeUri, $this->dependents[0]);
+		if($serializer === null)
+		{
+			throw new Exception('Failed to create serializer')				
+		}
+		return $serializer->serializeModelToString($this, $baseUri);
 	}
 
 	public function asStream()
