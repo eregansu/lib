@@ -157,6 +157,13 @@ if(function_exists('curl_init'))
 	$AUTOLOAD['curlcache'] = dirname(__FILE__) . '/curl.php';
 	$AUTOLOAD['curlheaders'] = dirname(__FILE__) . '/curl.php';
 }
+if(function_exists('openssl_pkey_get_public'))
+{
+	$AUTOLOAD['publickey'] = dirname(__FILE__) . '/pk.php';
+	$AUTOLOAD['privatekey'] = dirname(__FILE__) . '/pk.php';
+	$AUTOLOAD['rsapublickey'] = dirname(__FILE__) . '/pk.php';
+	$AUTOLOAD['rsaprivatekey'] = dirname(__FILE__) . '/pk.php';
+}
 
 /* Configure a consistent environment */
 umask(022);
