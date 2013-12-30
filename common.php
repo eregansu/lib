@@ -42,21 +42,8 @@ if(defined('WP_CONTENT_URL') && defined('ABSPATH'))
 	{
 		$MODULE_ROOT = MODULES_ROOT;	
 	}
+	return true;
 }
-
-
-/**
- * The ISerialisable interface is implemented by classes which can serialise
- * themselves.
- */
-interface ISerialisable
-{
-	public function serialise(&$mimeType, $returnBuffer = false, $request = null, $sendHeaders = null /* true if (!$returnBuffer && $request) */);
-}
-
-/* EREGANSU_MINIMAL_CORE is defined when the framework is included inside
- * WordPress
- */
 if(defined('EREGANSU_MINIMAL_CORE'))
 {
 	return true;
@@ -65,190 +52,6 @@ if(defined('EREGANSU_MINIMAL_CORE'))
 $EREGANSU_MODULE_MAP['url'] = 'uri';
 $EREGANSU_MODULE_MAP['xmlns'] = 'uri';
 if(!isset($EREGANSU_MODULES)) $EREGANSU_MODULES = array();
-
-/**
- * Determine whether an object or array is traversable as an array
- *
- * The \f{is_arrayish} function is analogous to PHP’s \f{is_array} function, except
- * that it also returns \c{true} if \p{$var} is an instance of a class implementing
- * the \c{Traversable} interface.
- *
- * @type bool
- * @param[in] mixed $var A variable to test
- * @return \c{true} if \p{$var} can be traversed using \f{foreach}, \c{false} otherwise
- */
-function is_arrayish($var)
-{
-	return is_array($var) || (is_object($var) && $var instanceof Traversable);
-}
-
-/**
- * Parse a string and return the boolean value it represents
- *
- * @type bool
- * @param[in] string $str a string representation of a boolean value
- * @return The boolean value \p{$str} represents
- */
-function parse_bool($str)
-{
-	$str = trim(strtolower($str));
-	if($str == 'yes' || $str == 'on' || $str == 'true') return true;
-	if($str == 'no' || $str == 'off' || $str == 'false') return false;
-	return !empty($str);
-}
-
-/**
- * @brief HTML-escape a string and output it
- *
- * \f{e} accepts a string and outputs it after ensuring any characters which have special meaning
- * in XML or HTML documents are properly escaped.
- *
- * @type void
- * @param[in] string $str The string to HTML-escape
- */
-function e($str)
-{
-	echo _e($str);
-}
-
-/**
- * @brief HTML-escape a string and return it.
- *
- * \f{_e} accepts a string and returns it after ensuring any characters which have special meaning
- * in XML or HTML documents are properly escaped. The resultant string is suitable for inclusion
- * in attribute values or element contents.
- *
- * @type string
- * @param[in] string $str The string to HTML-escape
- * @return The escaped version of \p{$str}
- */
- 
-function _e($str)
-{
-	return str_replace('&apos;', '&#39;', str_replace('&quot;', '&#34;', htmlspecialchars(strval($str), ENT_QUOTES, 'UTF-8')));
-}
-
-/**
- * Write text to the output stream, followed by a newline.
- * @return void
- * @varargs
- */
-
-function writeLn()
-{
-	$args = func_get_args();
-	echo implode(' ', $args) . "\n";
-}
-
-
-/**
- * Include one or more Eregansu modules
- *
- * The \f{uses} function loads one or more Eregansu modules. You can specify as
- * many modules as are needed, each as a separate parameter.
- *
- * @type void
- * @param[in] string $module,... The name of a module to require. For example, \l{base32}.
- */
-
-function uses($module /* ... */)
-{
-	global $EREGANSU_MODULE_MAP, $EREGANSU_MODULES;
-
-	$_modules = func_get_args();
-	foreach($_modules as $_mod)
-	{
-		$_mod = isset($EREGANSU_MODULE_MAP[$_mod]) ? $EREGANSU_MODULE_MAP[$_mod] : $_mod;
-		$_mod = isset($EREGANSU_MODULES[$_mod]) ? $EREGANSU_MODULES[$_mod] : dirname(__FILE__) . '/' . $_mod . '.php';
-		require_once($_mod);
-	}
-}
-
-/**
- * @brief Callback handler invoked by PHP when an undefined classname is referenced
- * @internal
- */
-function autoload_handler($name)
-{
-	global $AUTOLOAD, $AUTOLOAD_SUBST;
-	
-	if(isset($AUTOLOAD[strtolower($name)]))
-	{
-		$path = str_replace(array_keys($AUTOLOAD_SUBST), array_values($AUTOLOAD_SUBST), $AUTOLOAD[strtolower($name)]);
-		if(defined('EREGANSU_DEBUG_AUTOLOAD') && EREGANSU_DEBUG_AUTOLOAD)
-		{
-			echo "Autoloading <$path>\n";
-		}
-		require_once($path);
-		return true;
-	}
-	return false;
-}
-
-/**
- * @brief Callback invoked by PHP when an error occurs
- * @internal
- */
-
-function exception_error_handler($errno, $errstr, $errfile, $errline)
-{
-	$e = error_reporting();
-	if(!$errno || ($e & $errno) != $errno) return;
-	if(defined('EREGANSU_STRICT_ERROR_HANDLING') &&
-	   ($errno & (E_WARNING|E_USER_WARNING|E_NOTICE|E_USER_NOTICE)))
-	{
-		throw new ErrorException($errstr, 0, $errno, $errfile, $errline);
-		exit(1);
-	}		
-	if($errno & (E_ERROR|E_PARSE|E_CORE_ERROR|E_COMPILE_ERROR|E_USER_ERROR|E_RECOVERABLE_ERROR))
-	{
-		throw new ErrorException($errstr, 0, $errno, $errfile, $errline);
-		exit(1);
-	}
-	return false;
-}
-
-function strict_error_handler($errno, $errstr, $errfile, $errline)
-{
-	$e = error_reporting();
-	if(!$errno || ($e & $errno) != $errno) return;
-	throw new ErrorException($errstr, 0, $errno, $errfile, $errline);
-	return false;
-}
-
-function exception_handler($exception)
-{
-	if(php_sapi_name() != 'cli') echo '<pre>';
-	echo "Uncaught exception:\n\n";
-	echo $exception . "\n";
-	die(1);
-}
-
-function assertion_handler()
-{
-	throw new ErrorException('Assertion failed');
-	die(1);
-}
-
-umask(007);
-error_reporting(E_ALL|E_STRICT|E_RECOVERABLE_ERROR);
-ini_set('display_errors', 'On');
-if(function_exists('set_magic_quotes_runtime'))
-{
-	@set_magic_quotes_runtime(0);
-}
-ini_set('session.auto_start', 0);
-ini_set('default_charset', 'UTF-8');
-ini_set('arg_separator.output', ';');
-if(function_exists('mb_regex_encoding')) mb_regex_encoding('UTF-8');
-if(function_exists('mb_internal_encoding')) mb_internal_encoding('UTF-8');
-date_default_timezone_set('UTC');
-putenv('TZ=UTC');
-ini_set('date.timezone', 'UTC');
-set_error_handler('exception_error_handler');
-set_exception_handler('exception_handler');
-assert_options(ASSERT_QUIET_EVAL, true);
-assert_options(ASSERT_CALLBACK, 'assertion_handler');
 
 if(!defined('PUBLIC_ROOT'))
 {
@@ -355,15 +158,43 @@ if(function_exists('curl_init'))
 	$AUTOLOAD['curlheaders'] = dirname(__FILE__) . '/curl.php';
 }
 
+/* Configure a consistent environment */
+umask(022);
+error_reporting(E_ALL|E_STRICT|E_RECOVERABLE_ERROR);
+ini_set('display_errors', 'On');
+if(function_exists('set_magic_quotes_runtime'))
+{
+	@set_magic_quotes_runtime(0);
+}
+ini_set('session.auto_start', 0);
+ini_set('default_charset', 'UTF-8');
+ini_set('arg_separator.output', ';');
+if(function_exists('mb_regex_encoding')) mb_regex_encoding('UTF-8');
+if(function_exists('mb_internal_encoding')) mb_internal_encoding('UTF-8');
+date_default_timezone_set('UTC');
+putenv('TZ=UTC');
+ini_set('date.timezone', 'UTC');
+
+/* Ensure utilities and handlers are available */
+require_once(dirname(__FILE__) . '/utils.php');
+
+/* Install Eregansu handlers (see utils.php) for errors, exceptions,
+ * assertions and autoloading
+ */
+set_error_handler('eregansu_error_handler');
+set_exception_handler('eregansu_exception_handler');
+assert_options(ASSERT_QUIET_EVAL, true);
+assert_options(ASSERT_CALLBACK, 'eregansu_assertion_handler');
+
 if(function_exists('spl_autoload_register'))
 {
-	spl_autoload_register('autoload_handler');
+	spl_autoload_register('eregansu_autoload_handler');
 }
 else
 {
 	function __autoload($name)
 	{
-		return autoload_handler($name);
+		return eregansu_autoload_handler($name);
 	}
 }
 

@@ -23,5 +23,9 @@ class BuiltinLibModuleInstall extends BuiltinModuleInstaller
 	{
 		fwrite($file, "/* Uncomment the below to enable debugging across the framework */\n");
 		fwrite($file, "/* define('EREGANSU_DEBUG', true); */\n\n");
+		fwrite($file, "/* Uncomment the below to throw exceptions on warnings and notices */\n");
+		fwrite($file, "/* define('EREGANSU_STRICT_ERROR_HANDLING', true); */\n\n");
+		fwrite($file, "/* Uncomment the below to log when autoloading occurs via error_log() */\n");
+		fwrite($file, "/* define('EREGANSU_DEBUG_AUTOLOAD', true); */\n\n");
 	}
 }
