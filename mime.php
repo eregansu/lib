@@ -2,7 +2,7 @@
 
 /* Eregansu: MIME type support
  *
- * Copyright 2009-2011 Mo McRoberts.
+ * Copyright 2009-2013 Mo McRoberts.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -223,8 +223,10 @@ abstract class MIME
 		'application/x-yaml' => array('yaml'),
 		'application/n3' => array('n3'),
 		'application/n-triples' => array('nt'),
+		'application/n-quads' => array('nq'),
 		'application/x-trig' => array('trig'),
-		
+		'application/trig' => array('trig'),
+
 		'application/x-pem-file' => array('pem'),
 		'application/x-pkcs12' => array('pfx', 'p12'),
 		'application/x-pkcs7-certificates' => array('p7b', 'spc'),
