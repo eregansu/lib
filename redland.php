@@ -719,14 +719,12 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 		$inst->weak = true;
 		if(isset($this->subjectFilter))
 		{
-			echo "Creating graph filtered on predicate <$key>\n";
 			$inst->subjectFilter = $this->subjectFilter;
 			$inst->predicateFilter = $key;
 			$inst->predicateNode = $node;
 		}
 		else
 		{
-			echo "Creating graph filtered on subject <$key>\n";
 			$inst->subjectFilter = $key;
 			$inst->subjectNode = $node;
 		}
