@@ -31,9 +31,9 @@ abstract class RedlandBase
 
 	public function __construct($resource, $dependents = null)
 	{
-		if(!is_resource($resource))
+		if($resource !== null && !is_resource($resource))
 		{
-			throw new Exception('Argument 1 passed to RedlandBase::__construct() must be a resource');
+			throw new Exception('Argument 1 passed to RedlandBase::__construct() must be a resource or null');
 		}
 		$this->resource = $resource;
 		$this->dependents = $dependents;
@@ -404,6 +404,7 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 		'application/n-quads' => array('name' => 'nquads', 'title' => 'NQuads', 'q' => 0.85),
 		'application/n-triples' => array('name' => 'ntriples', 'title' => 'NTriples', 'q' => 0.8),
 		'application/rdf+json' => array('name' => 'json', 'title' => 'RDF/JSON', 'q' => 0.75),
+		'text/html' => array('title' => 'HTML', 'q' => 1.0),
 		);
 
 	protected $resourceDestructor = 'librdf_free_model';
@@ -417,6 +418,14 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 	protected $prevKey = null;
 	protected $curObj = null;
 	protected $ended = false;
+
+	/* Properties for serialising as HTML */
+	public $htmlHead = null;
+	public $htmlPreBody = null;
+	public $htmlPostBody = null;
+	public $htmlLinks = array();
+	public $htmlTitle = null;
+	public $htmlIgnoreSubjects = array();
 
 	public static function create($options = null, $storage = null, $world = null)
 	{
@@ -497,6 +506,12 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 	{
 		if($serializerName === null)
 		{
+			/* For HTML, we use our own serialiser */
+			if($mimeType == 'text/html')
+			{
+				$serializer = new RedlandHTMLSerializer();
+				return $serializer->serializeModelToString($this, $baseUri);
+			}
 			if(isset(self::$knownSerialisations[$mimeType]))
 			{
 				$serializerName = self::$knownSerialisations[$mimeType]['name'];
@@ -518,7 +533,7 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 			self::$serialisations = array();
 			foreach(self::$knownSerialisations as $mime => $info)
 			{
-				if(librdf_serializer_check_name($this->dependents[0]->resource, $info['name']))
+				if($mime == 'text/html' || librdf_serializer_check_name($this->dependents[0]->resource, $info['name']))
 				{
 					self::$serialisations[$mime] = $info;
 				}
@@ -1506,7 +1521,7 @@ class RDFNode extends RedlandBase
 
 	public function equals(RDFNode $node)
 	{
-		return (librdf_node_equals($this->resource, $node->resource) == 0) ? true : false;
+		return (librdf_node_equals($this->resource, $node->resource) == 0) ? false : true;
 	}
 	
 	public function type()
@@ -1522,6 +1537,16 @@ class RDFNode extends RedlandBase
 			$inst = new URI($res, $this);
 			$inst->weak = true;
 			return $inst;
+		}
+		return null;
+	}
+
+	public function uriStr()
+	{
+		$res = librdf_node_get_uri($this->resource);
+		if(is_resource($res))
+		{
+			return librdf_uri_to_string($res);
 		}
 		return null;
 	}
@@ -1562,3 +1587,234 @@ class RDFNode extends RedlandBase
 	}
 }
 
+class RedlandHTMLSerializer extends RedlandSerializer
+{
+	protected $resourceDestructor = null;
+	
+	public function __construct()
+	{
+		parent::__construct(null, null);
+	}
+	
+	public function serializeModelToString(RDFGraph $model, $baseUri = null)
+	{
+		$buf = array();
+		$buf[] = '<!DOCTYPE html>';
+		$buf[] = '<html>';
+		$buf[] = '<head>';
+		$buf[] = '<meta charset="UTF-8">';
+		if(isset($model->htmlTitle))
+		{
+			$buf[] = '<title>' . _e($model->htmlTitle) . '</title>';
+		}
+		if(isset($model->htmlLinks))
+		{
+			foreach($model->htmlLinks as $link)
+			{
+				$t = '<link';
+				foreach($link as $k => $v)
+				{
+					$t .= ' ' . $k . '="' . _e($v) . '"';
+				}
+				$t .= '>';
+				$buf[] = $t;
+			}
+		}
+		if(isset($model->htmlHead))
+		{
+			$buf[] = $model->htmlHead;
+		}
+		$buf[] = '</head>';
+		$buf[] = '<body>';
+		if(isset($model->htmlPreBody))
+		{
+			$buf[] = $model->htmlPreBody;
+		}
+		$stream = $model->asStream();
+		$prevSubject = null;
+		foreach($stream as $statement)
+		{
+			$subject = $statement->subject();
+			if($prevSubject !== null && $subject->equals($prevSubject))
+			{
+				continue;
+			}
+			$prevSubject = $subject;
+			$uri = $subject->uriStr();
+			if(in_array($uri, $model->htmlIgnoreSubjects))
+			{
+				continue;
+			}
+			$buf[] = $this->subjectAsHTML($uri, $subject, $model[$uri], $model);
+		}
+		if(isset($model->htmlPostBody))
+		{
+			$buf[] = $model->htmlPostBody;
+		}
+		$buf[] = '</body>';
+		$buf[] = '</html>';
+		return implode("\n", $buf);
+	}
+
+	public function subjectAsHTML($uri, RDFNode $subject, RDFGraph $graph, RDFGraph $doc)
+	{
+		$buf = array();
+		$buf[] = '<table id="' . $this->idForNode($subject, $doc) . '">';
+		if($subject->isResource())
+		{
+			$link = $uri;
+		}
+		else
+		{
+			$link = null;
+		}
+		$buf[] = '<caption>' . $this->generateCaption($graph, $link, $uri) . '</caption>';
+		$buf[] = '<thead>';
+		$buf[] = '<tr>';
+		$buf[] = '<th class="predicate" scope="col">Property</th>';
+		$buf[] = '<th class="object" scope="col">Value</th>';
+		$buf[] = '</tr>';
+		$buf[] = '</thead>';
+		$buf[] = '<tbody>';
+		$values = array();
+		$prev = null;
+		if($subject->isResource())
+		{
+			$buf[] = '<tr><td>' . $this->generateLink(URI::rdf.'about', '@', null, $doc) . '</td><td><p>' . $this->generateLink($uri, $uri, URI::rdf.'about', $doc) . '</p></td></tr>';
+		}
+		else
+		{
+			$buf[] = '<tr><td>' . $this->generateLink(URI::rdf.'about', '@', null, $doc) . '</td><td><p>' . _e($subj) . '</p></td>';
+		}
+		foreach($graph as $predicate => $objects)
+		{
+			$values = array();
+			foreach($objects as $object)
+			{
+				$row = array();
+				$row[] = '<td class="object">';
+				if($object->isLiteral())
+				{
+					$row[] = '<p><q class="literal">' . str_replace('<p><q class="literal"></q></p>', '', str_replace("\n", '</q></p><p><q class="literal">', _e($object->value()))) . '</q>';
+					$lang = $object->language();
+					if(strlen($lang))
+					{
+						$row[] = '<span class="lang">[' . _e($lang) . ']</span>';
+					}
+					$dt = $object->datatype();
+					if($dt !== null)
+					{
+						$short = URI::contractUri($dt, false);
+						$row[] = '(' . $this->generateLink($dt, $short, URI::rdf.'datatype', $doc) . ')';
+					}
+					$row[] = '</p>';
+				}
+				else if($object->isResource())
+				{
+					$target = $link = $object->uriStr();
+					if(isset($doc[$target]))
+					{
+						$link = '#' . $this->idForNode($object, $doc);
+					}
+					$short = URI::contractUri($target, false);
+					if($short === null)
+					{
+						$short = $target;
+					}
+					$row[] = $this->generateLink($link, $short, $predicate, $doc);
+				}
+				else if($object->isBlank())
+				{
+					$link = '#' . $this->idForNode($object, $doc);
+					$row[] = $this->generateLink($link, $object, $predicate, $doc);
+				}				
+				$row[] = '</td>';
+				$values[] = implode("\n", $row);
+			}
+			$this->writeHTMLRow($buf, $doc, $predicate, $values);
+		}
+		$buf[] = '</tbody>';
+		$buf[] = '</table>';
+		return implode("\n", $buf);
+	}
+
+	protected function idForNode(RDFNode $node, RDFGraph $doc)
+	{
+		$localId = 'local-' . md5($node);
+		return $localId;
+	}
+
+	protected function generateLink($target, $text, $predicate, $doc)
+	{
+		if(!strlen($text))
+		{
+			$text = $target;
+		}
+		if(isset($doc->linkFilter))
+		{
+			$r = call_user_func($doc->linkFilter, $target, $text, $predicate, $doc, $this);
+			if($r !== null)
+			{
+				return $r;
+			}
+		}
+		if($predicate === null && !strcmp($target, URI::rdf.'about'))
+		{
+			return '@';
+		}
+		if($predicate === null && !strcmp($target, URI::rdf.'type'))
+		{
+			return 'a';
+		}
+		return '<a href="' . _e($target) . '">' . _e($text) . '</a>';
+	}
+
+	protected function generateCaption(RDFGraph $graph, $link, $subject)
+	{
+		$title = $graph->title();
+		if(!strlen($title))
+		{
+			$title = $subject;
+		}
+		if($link !== null)
+		{
+			return '<a title="' . _e($subject) . '" href="' . _e($link) . '">' . _e($title) . '</a>';
+		}
+		return '<span title="' . _e($subject) . '">' . _e($title) . '</span>';
+	}
+
+	protected function writeHTMLRow(&$buf, $doc, $predicate, $values)
+	{
+		if(!strcmp($predicate, URI::rdf.'about'))
+		{
+			$short = '@';
+		}
+		else if(!strcmp($predicate, URI::rdf.'type'))
+		{
+			$short = 'is a';
+		}
+		else
+		{
+			$short = URI::contractUri($predicate, true);
+		}
+		$link = $this->generateLink($predicate, $short, null, $doc);
+		$buf[] = '<tr>';
+		$count = count($values);
+		if($count > 1)
+		{
+			$span = ' rowspan="' . $count . '"';
+		}
+		else
+		{
+			$span = '';
+		}
+		$buf[] = '<td class="predicate"' . $span . '>' . $link . '</td>';
+		foreach($values as $val)
+		{
+			$buf[] = $val;
+			$buf[] = '</tr>';
+			$buf[] = '<tr>';
+		}
+		array_pop($buf);
+	}
+}
