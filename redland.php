@@ -1,6 +1,6 @@
 <?php
 
-/* Copyright 2010-2013 Mo McRoberts.
+/* Copyright 2010-2014 Mo McRoberts.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -387,7 +387,7 @@ class RedlandStream extends RedlandBase implements Iterator
 			return null;
 		}
 		/* librdf_stream_get_object() returns a shared pointer */
-		$st = RDFTriple::alias($res);
+		$st = RDFTriple::alias($res, $this);
 		return $st;
 	}
 }
