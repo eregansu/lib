@@ -1623,6 +1623,7 @@ class RedlandHTMLSerializer extends RedlandSerializer
 		$buf[] = '<html>';
 		$buf[] = '<head>';
 		$buf[] = '<meta charset="UTF-8">';
+		$seen = array();
 		if(isset($model->htmlTitle))
 		{
 			$buf[] = '<title>' . _e($model->htmlTitle) . '</title>';
@@ -1661,10 +1662,11 @@ class RedlandHTMLSerializer extends RedlandSerializer
 			}
 			$prevSubject = $subject;
 			$uri = $subject->uriStr();
-			if(in_array($uri, $model->htmlIgnoreSubjects))
+			if(in_array($uri, $model->htmlIgnoreSubjects) || in_array($uri, $seen))
 			{
 				continue;
 			}
+			$seen[] = $uri;
 			$buf[] = $this->subjectAsHTML($uri, $subject, $model[$uri], $model);
 		}
 		if(isset($model->htmlPostBody))
