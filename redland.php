@@ -552,13 +552,33 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 		return new RedlandStream($res, $this);
 	}
 
+	protected function uriNodeResource($uristr)
+	{
+		$res = librdf_new_node_from_uri_string($this->dependents[0]->resource, $uristr);
+		if(!is_resource($res))
+		{
+			throw new Exception('Failed to create node form URI <' . $uristr . '>');
+		}
+		return $res;
+	}
+
+	protected function statementFromNodes($subj, $pred, $obj)
+	{
+		$res = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, $pred, $obj);
+		if(!is_resource($res))
+		{
+			throw new Exception('Failed to create statement from nodes');
+		}
+		return $res;
+	}
+
 	public function add(RDFNode $subject, RDFNode $predicate, RDFNode $object)
 	{
 		if(isset($this->subjectFilter))
 		{
 			if(!isset($this->subjectNode))
 			{
-				$this->subjectNode = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->subjectFilter);
+				$this->subjectNode = $this->uriNodeResource($this->subjectFilter);
 			}
 			if(!rdf_node_equals($subject->resource, $this->subjectNode))
 			{
@@ -569,7 +589,7 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 		{
 			if(!isset($this->predicateNode))
 			{
-				$this->predicateNode = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->subjectFilter);
+				$this->predicateNode = $this->uriNodeResource($this->subjectFilter);
 			}
 			if(!rdf_node_equals($predicate->resource, $this->predicateNode))
 			{
@@ -592,7 +612,7 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 		{
 			if(!isset($this->subjectNode))
 			{
-				$this->subjectNode = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->subjectFilter);
+				$this->subjectNode = $this->uriNodeResource($this->subjectFilter);
 			}
 			if(!librdf_node_equals(librdf_statement_get_subject($statement->resource), $this->subjectNode))
 			{
@@ -603,7 +623,7 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 		{
 			if(!isset($this->predicateNode))
 			{
-				$this->predicateNode = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->predicateFilter);
+				$this->predicateNode = $this->uriNodeResource($this->predicateFilter);
 			}
 			if(!librdf_node_equals(librdf_statement_get_predicate($statement->resource), $this->predicateNode))
 			{
@@ -674,9 +694,9 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 				continue;
 			}
 			/* Ownership of the nodes is transferred to the statement */
-			$subj = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->subjectFilter);
-			$pred = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->predicateFilter);
-			$query = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, $pred, null);
+			$subj = $this->uriNodeResource($this->subjectFilter);
+			$pred = $this->uriNodeResource($this->predicateFilter);
+			$query = $this->statementFromNodes($subj, $pred, null);
 			$iterator = librdf_model_find_statements($this->resource, $query);
 			librdf_free_statement($query);
 			while(!librdf_stream_end($iterator))
@@ -730,9 +750,9 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 			{
 				$predicateUri = URI::expandUri($predicateUri, true);
 				/* Ownership of the nodes is transferred to the statement */
-				$subj = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->subjectFilter);
-				$pred = librdf_new_node_from_uri_string($this->dependents[0]->resource, $predicateUri);
-				$query = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, $pred, null);
+				$subj = $this->uriNodeResource($this->subjectFilter);
+				$pred = $this->uriNodeResource($predicateUri);
+				$query = $this->statementFromNodes($subj, $pred, null);
 				/* Ownership of the query statement is transferred to the
 				 * stream; we must not free it ourselves.
 				 */
@@ -862,13 +882,13 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 		if(isset($this->subjectFilter))
 		{
 			/* Ownership of the nodes is transferred to the statement */
-			$subj = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->subjectFilter);
+			$subj = $this->uriNodeResource($this->subjectFilter);
 			$pred = null;
 			if(isset($this->predicateFilter))
 			{
-				$pred = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->predicateFilter);
+				$pred = $this->uriNodeResource($this->predicateFilter);
 			}
-			$query = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, $pred, null);
+			$query = $this->statementFromNodes($subj, $pred, null);
 			$this->iterator = librdf_model_find_statements($this->resource, $query);
 			librdf_free_statement($query);
 		}
@@ -996,9 +1016,9 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 				return null;
 			}
 			/* Locate the <key>th item in the list of nodes */
-			$subj = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->subjectFilter);
-			$pred = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->predicateFilter);
-			$query = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, $pred, null);
+			$subj = $this->uriNodeResource($this->subjectFilter);
+			$pred = $this->uriNodeResource($this->predicateFilter);
+			$query = $this->statementFromNodes($subj, $pred, null);
 			$iterator = librdf_model_find_statements($this->resource, $query);
 			librdf_free_statement($query);
 			$node = null;
@@ -1094,8 +1114,8 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 			if(isset($this->predicateFilter))
 			{
 				/* $predicateModel[] = $node; */
-				$subj = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->subjectFilter);
-				$pred = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->predicateFilter);
+				$subj = $this->uriNodeResource($this->subjectFilter);
+				$pred = $this->uriNodeResource($this->predicateFilter);
 				$obj = librdf_new_node_from_node($value->resource);
 				/* The created nodes become owned by the model */
 				librdf_model_add($this->resource, $subj, $pred, $obj);
@@ -1109,8 +1129,8 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 					throw new Exception('cannot add a node to a subject-filtered model without specifying a predicate');
 				}
 				/* $subjectModel[$predicateUri] = $node; */
-				$subj = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->subjectFilter);
-				$pred = librdf_new_node_from_uri_string($this->dependents[0]->resource, URI::expandUri($key, true));
+				$subj = $this->uriNodeResource($this->subjectFilter);
+				$pred = $this->uriNodeResource(URI::expandUri($key, true));
 				$obj = librdf_new_node_from_node($value->resource);
 				/* The created nodes become owned by the model */
 				librdf_model_add($this->resource, $subj, $pred, $obj);
@@ -1130,14 +1150,14 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 				/* Check that the subject of the statement matches */
 				if(!isset($this->subjectNode))
 				{
-					$this->subjectNode = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->subjectFilter);
+					$this->subjectNode = $this->uriNodeResource($this->subjectFilter);
 				}
 				if(!librdf_node_equals(librdf_statement_get_subject($value->resource), $this->subjectNode))
 				{
 					throw new Exception('cannot add statement to filtered model because the subject does not match');		
 				}
 				/* Check that the predicate of the statement matches the key */
-				$uri = librdf_new_node_from_uri_string($this->dependents[0]->resource, $key);
+				$uri = $this->uriNodeResource($key);
 				if(!librdf_node_equals(librdf_statement_get_predicate($value->resource), $uri))
 				{
 					librdf_free_node($uri);
@@ -1148,7 +1168,7 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 			else
 			{
 				/* Check that the subject of the statement matches the key */
-				$uri = librdf_new_node_from_uri_string($this->dependents[0]->resource, $key);
+				$uri = $this->uriNodeResource($key);
 				if(!librdf_node_equals(librdf_statement_get_subject($value->resource), $uri))
 				{
 					librdf_free_node($uri);
@@ -1192,9 +1212,9 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 				return $found;
 			}
 			/* Locate the <key>th item in the list of nodes */
-			$subj = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->subjectFilter);
-			$pred = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->predicateFilter);
-			$query = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, $pred, null);
+			$subj = $this->uriNodeResource($this->subjectFilter);
+			$pred = $this->uriNodeResource($this->predicateFilter);
+			$query = $this->statementFromNodes($subj, $pred, null);
 			$iterator = librdf_model_find_statements($this->resource, $query);
 			librdf_free_statement($query);
 			for($c = 0; !librdf_stream_end($iterator); $c++)
@@ -1211,9 +1231,9 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 		else if(isset($this->subjectFilter))
 		{
 			/* If this is a subject-filtered model, indices are predicate URIs */
-			$subj = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->subjectFilter);
-			$pred = librdf_new_node_from_uri_string($this->dependents[0]->resource, $key);
-			$query = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, $pred, null);
+			$subj = $this->uriNodeResource($this->subjectFilter);
+			$pred = $this->uriNodeResource($key);
+			$query = $this->statementFromNodes($subj, $pred, null);
 			$iterator = librdf_model_find_statements($this->resource, $query);
 			librdf_free_statement($query);
 			if(!librdf_stream_end($iterator))
@@ -1225,8 +1245,8 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 		else
 		{
 			/* Not a filtered model, so indices are subject URIs */
-			$subj = librdf_new_node_from_uri_string($this->dependents[0]->resource, $key);
-			$query = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, null, null);
+			$subj = $this->uriNodeResource($key);
+			$query = $this->statementFromNodes($subj, null, null);
 			$iterator = librdf_model_find_statements($this->resource, $query);
 			librdf_free_statement($query);
 			if(!librdf_stream_end($iterator))
@@ -1250,9 +1270,9 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 				return;
 			}
 			/* Locate the <key>th item in the list of nodes */
-			$subj = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->subjectFilter);
-			$pred = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->predicateFilter);
-			$query = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, $pred, null);
+			$subj = $this->uriNodeResource($this->subjectFilter);
+			$pred = $this->uriNodeResource($this->predicateFilter);
+			$query = $this->statementFromNodes($subj, $pred, null);
 			$iterator = librdf_model_find_statements($this->resource, $query);
 			librdf_free_statement($query);
 			for($c = 0; !librdf_stream_end($iterator); $c++)
@@ -1270,9 +1290,9 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 		else if(isset($this->subjectFilter))
 		{
 			/* If this is a subject-filtered model, indices are predicate URIs */
-			$subj = librdf_new_node_from_uri_string($this->dependents[0]->resource, $this->subjectFilter);
-			$pred = librdf_new_node_from_uri_string($this->dependents[0]->resource, $key);
-			$query = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, $pred, null);
+			$subj = $this->uriNodeResource($this->subjectFilter);
+			$pred = $this->uriNodeResource($key);
+			$query = $this->statementFromNodes($subj, $pred, null);
 			$iterator = librdf_model_find_statements($this->resource, $query);
 			librdf_free_statement($query);
 			while(!librdf_stream_end($iterator))
@@ -1286,8 +1306,8 @@ class RDFGraph extends RedlandBase implements Iterator, ArrayAccess
 		else
 		{
 			/* Not a filtered model, so indices are subject URIs */
-			$subj = librdf_new_node_from_uri_string($this->dependents[0]->resource, $key);
-			$query = librdf_new_statement_from_nodes($this->dependents[0]->resource, $subj, null, null);
+			$subj = $this->uriNodeResource($key);
+			$query = $this->statementFromNodes($subj, null, null);
 			$iterator = librdf_model_find_statements($this->resource, $query);
 			librdf_free_statement($query);
 			while(!librdf_stream_end($iterator))
