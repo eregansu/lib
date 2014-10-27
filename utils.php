@@ -1,5 +1,5 @@
 <?php
-	
+
 /* Copyright 2009-2013 Mo McRoberts.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +14,15 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+
+
+/* The ISerialisable interface is implemented by classes which can serialise
+ * themselves.
+ */
+interface ISerialisable
+{
+	public function serialise(&$mimeType, $returnBuffer = false, $request = null, $sendHeaders = null);
+}
 
 /**
  * Determine whether an object or array is traversable as an array
